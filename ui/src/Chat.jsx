@@ -10,11 +10,11 @@ const SUGGESTED = [
   'who does wei chen report to?',
 ]
 
-const GATE_COPY = {
-  entity: 'gate one: the thing asked about is not in the corpus',
-  coverage: 'gate two: the entity exists, the asked about relation is not recorded',
-  sufficiency: 'gate three: the only evidence is too weak to stand behind',
-  verification: 'the generated answer cited something that was never retrieved',
+const WHY_COPY = {
+  entity: 'nothing in the loaded files mentions what you asked about',
+  coverage: 'the thing exists in your files, but nobody recorded this about it',
+  sufficiency: 'the only mention is too weak to rely on, so it is not presented as fact',
+  verification: 'the wording could not be traced back to the sources, so it was discarded',
 }
 
 export default function Chat({ people }) {
@@ -45,22 +45,22 @@ export default function Chat({ people }) {
 
   return (
     <section className="section">
-      <div className="eyebrow"><span className="tick">/</span>step two</div>
-      <h2 className="headline">ask the graph</h2>
+      <div className="eyebrow"><span className="tick">/</span>now ask anything</div>
+      <h2 className="headline">ask a question</h2>
       <p className="subline prose">
-        Every answer carries the path that produced it and the claims it rests on. When sources
-        disagree, the losing claim is shown rather than hidden. When the corpus does not hold an
-        answer, the system says so instead of guessing.
+        Every answer shows where it came from. When two sources disagreed, you see the one that was
+        overruled as well as the one that won. When your files do not contain the answer, it says so
+        rather than guessing.
       </p>
 
       <div className="chat">
         {turns.length === 0 && !busy && (
-          <div className="empty">no questions yet</div>
+          <div className="empty">ask something to begin</div>
         )}
         {turns.map((turn, i) => (
           <Turn key={i} turn={turn} people={people} />
         ))}
-        {busy && <div className="working">traversing</div>}
+        {busy && <div className="working">looking through your files</div>}
         <div ref={endRef} />
       </div>
 
@@ -78,7 +78,7 @@ export default function Chat({ people }) {
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && ask()}
-            placeholder="ask a question"
+            placeholder="for example, who owns the atlas migration"
           />
           <input className="field" style={{ minWidth: 150 }} type="date" value={asOf}
                  onChange={(e) => setAsOf(e.target.value)} title="answer as the graph stood on this date" />
@@ -103,7 +103,7 @@ function Turn({ turn, people }) {
       <div className="card">
         <div className="verdict">
           <span className="mark-line" />
-          <span className="state">{abstained ? 'not in the data' : 'answered'}</span>
+          <span className="state">{abstained ? 'not in your files' : 'answered'}</span>
           {result.as_of && <span className="badge quiet">as of {result.as_of.slice(0, 10)}</span>}
           <span className="meta mono">{result.latency_ms} ms</span>
         </div>
@@ -112,9 +112,9 @@ function Turn({ turn, people }) {
           <>
             <p className="answer-text abstained">{result.answer}</p>
             <div className="block">
-              <div className="label">why</div>
+              <div className="label">why not</div>
               <div className="prose" style={{ color: 'var(--dim)' }}>
-                {GATE_COPY[result.gate] || result.gate}
+                {WHY_COPY[result.gate] || result.gate}
               </div>
             </div>
           </>
@@ -123,7 +123,7 @@ function Turn({ turn, people }) {
             {top ? (
               <div className="triple">
                 <span className="term">{top.subject}</span>
-                <span className="rel">{top.predicate}</span>
+                <span className="rel">{top.predicate.replace(/_/g, ' ')}</span>
                 <span className="term">{top.object}</span>
               </div>
             ) : (
@@ -131,7 +131,7 @@ function Turn({ turn, people }) {
             )}
             {result.citations.length > 1 && (
               <div className="prose" style={{ color: 'var(--dimmer)', marginTop: 12 }}>
-                {result.citations.length} sources agree
+                {result.citations.length} sources say the same thing
               </div>
             )}
           </>
@@ -139,12 +139,12 @@ function Turn({ turn, people }) {
 
         {result.path?.length > 0 && (
           <div className="block">
-            <div className="label">traversal</div>
+            <div className="label">how it got there</div>
             <div className="triple">
               {result.path.map((hop, i) => (
                 <span key={i} className="triple" style={{ gap: 12 }}>
                   <span className="term">{hop.from}</span>
-                  <span className="rel">{hop.predicate}</span>
+                  <span className="rel">{hop.predicate.replace(/_/g, ' ')}</span>
                   <span className="term">{hop.to}</span>
                 </span>
               ))}
@@ -154,28 +154,28 @@ function Turn({ turn, people }) {
 
         {conflicts.length > 0 && (
           <div className="block">
-            <div className="label">conflict arbitrated</div>
+            <div className="label">two sources disagreed</div>
             {top && <Claim c={top} verdict="current" />}
             {conflicts.map((c) => <Claim key={c.key} c={c} verdict={c.status} />)}
             <p className="prose" style={{ color: 'var(--dimmer)', marginTop: 14 }}>
-              Nothing is deleted. The losing claim stays in the graph, linked by SUPERSEDES, which is
-              what lets the date field answer as of an earlier day.
+              Nothing is thrown away. The overruled statement is kept, which is how the date box above
+              can answer the same question as it stood on an earlier day.
             </p>
           </div>
         )}
 
         {result.citations?.length > 0 && (
           <div className="block">
-            <div className="label">evidence</div>
+            <div className="label">where this came from</div>
             {result.citations.map((c) => <Claim key={c.key} c={c} />)}
           </div>
         )}
 
         <div className="block">
-          <div className="label">query plan</div>
+          <div className="label">how the question was read</div>
           <div className="kv">
-            <span className="k">predicates</span>
-            <span className="v">{result.predicates?.join(', ') || 'none matched'}</span>
+            <span className="k">looking for</span>
+            <span className="v">{result.predicates?.map((p) => p.replace(/_/g, ' ')).join(', ') || 'nothing recognised'}</span>
           </div>
           {result.entities?.map((e, i) => (
             <div className="kv" key={i}>
@@ -187,12 +187,12 @@ function Turn({ turn, people }) {
 
         {people?.length > 0 && (
           <div className="block">
-            <div className="label">entity resolution</div>
+            <div className="label">people found under more than one name</div>
             {people.slice(0, 4).map((p) => (
               <div className="kv" key={p.key}>
                 <span className="k">{p.name}</span>
                 <span className="v">
-                  {p.aliases} aliases, {p.mentions} mentions
+                  {p.aliases} other names, mentioned {p.mentions} times
                   {p.evidence?.[0] && <em style={{ display: 'block', marginTop: 4 }}>{p.evidence[0]}</em>}
                 </span>
               </div>
@@ -208,14 +208,14 @@ function Claim({ c, verdict }) {
   return (
     <div className={`claim ${verdict === 'superseded' ? 'superseded' : ''}`}>
       <div className="row">
-        {verdict && <span className={`verdict-tag ${verdict}`}>{verdict}</span>}
+        {verdict && <span className={`verdict-tag ${verdict}`}>{verdict === 'superseded' ? 'overruled' : verdict}</span>}
         <span className="tool">{c.source_tool}</span>
         <span className="src">{c.source}</span>
         <span>{c.asserted_at}</span>
         <span className="score">{c.score.toFixed(2)}</span>
       </div>
       <div className="statement">
-        {c.subject} <span className="rel">{c.predicate}</span> {c.object}
+        {c.subject} <span className="rel">{c.predicate.replace(/_/g, ' ')}</span> {c.object}
       </div>
       {c.evidence && <div className="quote prose">{c.evidence}</div>}
     </div>

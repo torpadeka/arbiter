@@ -46,6 +46,11 @@ function Atmosphere({ onFound }) {
   )
 }
 
+const LABEL_COPY = {
+  Claim: 'statements', Artifact: 'documents', Person: 'people', Alias: 'alternate names',
+  Group: 'access groups', Topic: 'values', Project: 'projects', Account: 'customers', Team: 'teams',
+}
+
 export default function App() {
   const [stats, setStats] = useState(null)
   const [people, setPeople] = useState([])
@@ -71,11 +76,11 @@ export default function App() {
       <Atmosphere onFound={() => setAtmosphere(true)} />
 
       <div className="newsbar mono">
-        arbiter<span className="sep">•</span>enterprise ontology on hydradb
+        arbiter<span className="sep">•</span>answers from your company's own files
         <span className="sep">•</span>
         {loaded
-          ? <span className="live">{claims.toLocaleString()} claims loaded</span>
-          : <span>no corpus ingested</span>}
+          ? <span className="live">{claims.toLocaleString()} statements loaded</span>
+          : <span>nothing loaded yet</span>}
       </div>
 
       <div className="shell">
@@ -91,26 +96,27 @@ export default function App() {
           <div className="stats">
             {stats && Object.entries(stats.counts).filter(([, v]) => v > 0).map(([k, v]) => (
               <span key={k} className="badge quiet">
-                <span className="num">{v.toLocaleString()}</span> <span className="lbl">{k}</span>
+                <span className="num">{v.toLocaleString()}</span>{' '}
+                <span className="lbl">{LABEL_COPY[k] || k.toLowerCase()}</span>
               </span>
             ))}
             {loaded && (
               <button className="pill" onClick={() => setView(view === 'chat' ? 'ingest' : 'chat')}>
-                {view === 'chat' ? 'corpus' : 'ask'}
+                {view === 'chat' ? 'load other data' : 'ask questions'}
               </button>
             )}
           </div>
         </header>
 
         {view === 'ingest' && (
-          <Ingest onChanged={refresh} onReady={() => setView('chat')} />
+          <Ingest onChanged={refresh} onReady={() => setView('chat')} ai={stats?.ai} />
         )}
 
         {view === 'chat' && loaded && <Chat people={people} />}
 
         <footer className="foot">
-          every answer is a traversal in hydradb. gates run before any model call, so an unanswerable
-          question costs nothing and cannot be answered by a guess.
+          every answer is traced back to the document it came from. when your files do not hold the
+          answer, this says so instead of guessing. built on hydradb.
         </footer>
       </div>
     </div>

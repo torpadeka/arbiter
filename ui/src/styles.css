@@ -261,6 +261,22 @@ table.preds .obs { font-family: var(--font-mono); font-size: var(--text-caption)
   flex-wrap: wrap;
 }
 .demo-copy { flex: 1; min-width: 280px; }
+
+/* Two explicit choices instead of a jargon toggle: the reader picks by reading
+   what each one does, not by decoding a label. */
+.choices { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.choice {
+  flex: 1; min-width: 260px; text-align: left;
+  background: transparent; border: 1px solid var(--hairline);
+  border-radius: var(--radius-card); padding: 16px 18px;
+  display: flex; flex-direction: column; gap: 6px; color: var(--dim);
+}
+.choice:hover { border-color: var(--color-ash); }
+.choice.on { border-color: var(--color-ember-rust); color: var(--color-pure-white); }
+.choice.on .choice-title { color: var(--color-ember-rust); }
+.choice.off { opacity: 0.45; cursor: not-allowed; }
+.choice-title { color: var(--color-pure-white); }
+.choice-body { color: var(--dim); }
 .demo-copy .label { color: var(--color-ember-rust); margin-bottom: 8px; }
 .pill.ember { border-color: var(--color-ember-rust); color: var(--color-ember-rust); }
 .pill.ember:hover { border-color: var(--color-pure-white); color: var(--color-pure-white); }

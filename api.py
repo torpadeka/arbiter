@@ -279,10 +279,21 @@ def stats() -> dict:
     client = HydraClient()
     labels = ["Person", "Alias", "Artifact", "Claim", "Project", "Account", "Topic", "Group"]
     schema = active_schema()
+
+    # Whether prose reading is even possible, so the UI can explain instead of
+    # offering a switch that silently fails.
+    try:
+        from llm import LLMConfig, available
+
+        provider = LLMConfig.from_env().provider if available() else ""
+    except Exception:
+        provider = ""
+
     return {
         "counts": {label: client.count(label) for label in labels},
         "predicates": sorted(schema.predicates),
         "sources": sorted(schema.sources),
+        "ai": {"configured": bool(provider), "provider": provider},
     }
 
 
