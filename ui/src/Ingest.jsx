@@ -92,9 +92,12 @@ export default function Ingest({ onReady, onChanged }) {
           )}
 
           <Step n={usesInduction ? '03' : '02'} done={!!built} title="build the graph"
-                hint="Parse, resolve entities, arbitrate contradictions, write claims and provenance edges.">
-            <button className="pill" disabled={running}
+                hint={usesInduction
+                  ? 'Parse, resolve entities, arbitrate contradictions, write claims and provenance edges. Needs the ontology from step 02.'
+                  : 'Downloads the dataset if it is not present, then parses, resolves, arbitrates and writes. The adapter knows the org chart and the citation format.'}>
+            <button className="pill" disabled={running || (usesInduction && !induced)}
                     onClick={() => launch('/ingest', { tier_b: tierB, source, products: 5 }, 'ingest')}>build</button>
+            {usesInduction && !induced && <span className="hint prose">induce an ontology first</span>}
           </Step>
         </div>
 

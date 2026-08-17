@@ -202,6 +202,20 @@ def ingest(request: IngestRequest) -> dict:
     def work() -> dict:
         from ingest.load import run as load_run
 
+        if request.source == "herb":
+            # Download on demand so a clean clone can run this without a
+            # separate CLI step. Already-present files are left alone.
+            from ingest.herb import fetch, product_files
+
+            have = len(product_files())
+            want = request.products or 5
+            if have < want:
+                print(f"fetching HERB from huggingface: {have} of {want} products present")
+                fetch(want)
+                print(f"fetched, {len(product_files())} product files available")
+        elif not state.get("schema"):
+            raise RuntimeError("no ontology yet: run step 02 to induce one from the folder first")
+
         graph = load_run(
             tier_b=request.tier_b,
             source="herb" if request.source == "herb" else "seed",
