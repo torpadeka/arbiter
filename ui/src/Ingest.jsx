@@ -15,6 +15,7 @@ export default function Ingest({ onReady, onChanged, ai }) {
   const [dataDir, setDataDir] = useState('data/raw')
   const [readProse, setReadProse] = useState(false)
   const [deriveOntology, setDeriveOntology] = useState(true)
+  const herbProducts = Number(new URLSearchParams(location.search).get('products') || 5)
   const [job, setJob] = useState(null)
   const [kind, setKind] = useState('')
   const [log, setLog] = useState([])
@@ -176,11 +177,11 @@ export default function Ingest({ onReady, onChanged, ai }) {
           <p className="hint prose" style={{ margin: 0 }}>
             Use a real published dataset instead. Salesforce herb is 39,190 documents from a fictional
             company: slack threads, documents, meeting transcripts and pull requests across 30 products.
-            This downloads it, clears the database, and builds five products. Takes about a minute.
+            This downloads it, clears the database, and builds {herbProducts} of them. Takes under a minute.
           </p>
         </div>
         <button className="pill ember" disabled={running}
-                onClick={() => launch('/demo/herb', { products: 5, tier_b: readProse }, 'ingest')}>
+                onClick={() => launch('/demo/herb', { products: herbProducts, tier_b: readProse }, 'ingest')}>
           use the example dataset
         </button>
       </div>
