@@ -84,7 +84,7 @@ export default function Chat({ people }) {
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && ask()}
-            placeholder="for example, who owns the atlas migration"
+            placeholder="ask your question here"
           />
           <input className="field" style={{ minWidth: 150 }} type="date" value={asOf}
                  onChange={(e) => setAsOf(e.target.value)} title="answer as the graph stood on this date" />
