@@ -321,6 +321,159 @@ def entities(limit: int = 40) -> dict:
     } for r in people]}
 
 
+# Question shapes keyed on words in a predicate name, so this works for a
+# hand-written vocabulary and an induced one alike. Two phrasings per shape,
+# because direction decides the sentence: AUTHORED runs person to document, so
+# its subject is the author, and asking "who authored Wei Chen" is nonsense.
+QUESTION_SHAPES: list[tuple[tuple[str, ...], str, str]] = [
+    # needles, subject is a thing, subject is a person
+    (("assign",), "who is {s} assigned to?", "what is assigned to {s}?"),
+    (("report",), "who reports to {s}?", "who does {s} report to?"),
+    (("own",), "who owns {s}?", "what does {s} own?"),
+    (("author", "wrote"), "who authored {s}?", "what has {s} authored?"),
+    (("review", "approv"), "who reviewed {s}?", "what has {s} reviewed?"),
+    (("status", "state"), "what is the status of {s}?", "what is the status of {s}?"),
+    (("due", "schedul", "launch"), "when is {s} due?", "when is {s} due?"),
+    (("block",), "what blocks {s}?", "what does {s} block?"),
+    (("budget", "cost"), "what is the budget for {s}?", "what is the budget for {s}?"),
+    (("member", "team"), "who is on {s}?", "what is {s} a member of?"),
+    (("customer", "account", "company"), "which customer is {s} linked to?", "which customers does {s} cover?"),
+    (("mention", "discuss", "reference", "involve"), "what does {s} mention?", "where is {s} mentioned?"),
+    (("work",), "who works on {s}?", "what does {s} work on?"),
+    (("priorit",), "what is the priority of {s}?", "what is the priority of {s}?"),
+    (("escalat",), "who is {s} escalated to?", "what is escalated to {s}?"),
+]
+
+
+def phrase_question(predicate: str, subject: str, subject_is_person: bool = False) -> str:
+    words = predicate.lower().replace("_", " ")
+    for needles, thing_first, person_first in QUESTION_SHAPES:
+        if any(n in words for n in needles):
+            return (person_first if subject_is_person else thing_first).format(s=subject)
+    return f"what is the {words} of {subject}?"
+
+
+@app.get("/api/suggestions")
+def suggestions(limit: int = 6) -> dict:
+    """Questions drawn from the graph that is actually loaded.
+
+    Hardcoded examples are worse than none: after loading a different corpus
+    they all miss, which reads as a broken system rather than a different
+    dataset. These are built from real subjects, and deliberately include a
+    disagreement and something the corpus cannot answer.
+    """
+    client = HydraClient()
+    eng = engine()
+    schema = active_schema()
+
+    def name_of(key: str) -> str:
+        label = eng.label(key)
+        return label if label and label != "?" else key.split(":")[-1].replace("-", " ")
+
+    fields = ("c.key AS key, c.predicate AS predicate, c.subject_key AS subject_key, "
+              "c.status AS status")
+    current = client.query(
+        f"MATCH (c:Claim) WHERE c.status = $s RETURN {fields} ORDER BY key LIMIT 600",
+        {"s": "current"},
+    )
+    overruled = client.query(
+        f"MATCH (c:Claim) WHERE c.status = $s RETURN {fields} ORDER BY key LIMIT 40",
+        {"s": "superseded"},
+    )
+
+    out: list[dict] = []
+    seen_predicates: set[str] = set()
+
+    # Lead with a disagreement if the corpus contains one: it is the most
+    # revealing question anyone can ask of this system.
+    for row in overruled:
+        key = row.get("subject_key") or ""
+        subject = name_of(key)
+        if subject:
+            out.append({
+                "q": phrase_question(row["predicate"], subject, key.startswith("person:")),
+                "tag": "sources disagree",
+            })
+            seen_predicates.add(row["predicate"])
+            break
+
+    # Then a spread across different relationships, one per predicate.
+    for row in current:
+        predicate = row.get("predicate") or ""
+        if predicate in seen_predicates or predicate in {"MENTIONS", "DISCUSSED_IN"}:
+            continue
+        key = row.get("subject_key") or ""
+        subject = name_of(key)
+        if not subject or len(subject) > 48:
+            continue
+        seen_predicates.add(predicate)
+        out.append({
+            "q": phrase_question(predicate, subject, key.startswith("person:")),
+            "tag": "look up",
+        })
+        if len(out) >= limit * 3:
+            break
+
+    # Finish with something the corpus provably cannot answer: a relationship in
+    # the vocabulary that no statement uses, asked of a subject that does exist.
+    used = {r.get("predicate") for r in current} | {r.get("predicate") for r in overruled}
+    unused = [p for p in schema.predicate_names if p not in used]
+    # For a question that should have no answer, the subject matters. Prefer a
+    # project or a person over a document, and avoid names that contain a word
+    # the planner reads as a relationship: an artifact called "Atlas launch"
+    # makes "launch" look like part of the question.
+    collisions = {"launch", "due", "status", "owner", "assigned", "report", "budget",
+                  "block", "review", "author", "member", "work", "priority", "escalate"}
+
+    def anchor_rank(key: str) -> tuple:
+        name = name_of(key).lower()
+        dirty = any(word in collisions for word in name.split())
+        return (dirty, key.startswith("artifact:"), len(name))
+
+    anchors = sorted(
+        {r["subject_key"] for r in current if r.get("subject_key")},
+        key=anchor_rank,
+    )[:6]
+    for predicate in (unused or ["BUDGET_IS"])[:4]:
+        for anchor_key in anchors:
+            anchor = name_of(anchor_key)
+            if anchor and len(anchor) <= 48:
+                out.append({
+                    "q": phrase_question(predicate, anchor, anchor_key.startswith("person:")),
+                    "tag": "no answer exists",
+                })
+                break
+
+    # Verify before offering. A generated question can miss for reasons no
+    # template can foresee: here an artifact is literally named "Atlas launch",
+    # and "launch" is a word the planner reads as a predicate, so a question
+    # meant to have no answer quietly found one. Asking each candidate is
+    # cheap, and a suggestion that misbehaves on screen is not.
+    buckets: dict[str, list[dict]] = {"sources disagree": [], "look up": [], "no answer exists": []}
+    for candidate in out:
+        tag = candidate["tag"]
+        # Enough of each kind to fill the reserved slots, and no more: every
+        # candidate costs a real traversal to verify.
+        if len(buckets[tag]) >= (limit if tag == "look up" else 2):
+            continue
+        try:
+            answer = engine().ask(candidate["q"], use_model=False)
+        except Exception:
+            continue
+        if (tag != "no answer exists") == answer.abstained:
+            continue
+        if tag == "sources disagree" and not answer.superseded:
+            tag = "look up"
+        buckets[tag].append({**candidate, "tag": tag})
+
+    # A disagreement and a question with no answer are the two most revealing
+    # things this system does, so each gets a reserved slot rather than
+    # competing with straightforward lookups for space.
+    picked = buckets["sources disagree"][:1] + buckets["no answer exists"][:1]
+    picked += buckets["look up"][: max(0, limit - len(picked))]
+    return {"suggestions": picked[:limit]}
+
+
 @app.post("/api/ask")
 def ask(request: AskRequest) -> dict:
     started = time.time()

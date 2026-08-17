@@ -354,3 +354,7 @@ table.preds .obs { font-family: var(--font-mono); font-size: var(--text-caption)
 .empty { color: var(--dimmer); padding: 40px 0; text-align: center; }
 
 footer.foot { margin-top: 80px; padding-top: 20px; border-top: 1px solid var(--hairline-soft); color: var(--dimmer); }
+
+/* Suggested questions carry a small tag naming what each one demonstrates. */
+.suggest button { display: inline-flex; gap: 10px; align-items: center; }
+.suggest .tag { color: var(--color-ember-rust); font-family: var(--font-mono); font-size: 10px; letter-spacing: -0.2px; text-transform: none; }

@@ -56,6 +56,7 @@ PREDICATE_HINTS: list[tuple[str, list[str]]] = [
     ("work on", ["WORKS_ON"]),
     ("member", ["MEMBER_OF"]),
     ("wrote", ["AUTHORED"]),
+    ("written", ["AUTHORED"]),
     ("author", ["AUTHORED"]),
     ("reviewed", ["REVIEWED_BY"]),
     ("reviewer", ["REVIEWED_BY"]),

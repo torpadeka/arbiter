@@ -1,15 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 
-const SUGGESTED = [
-  'who is eng-4471 assigned to?',
-  'what does @soham work on?',
-  'who does @soham report to?',
-  'who owns atlas migration?',
-  'when does atlas migration launch?',
-  'what is the budget for atlas migration?',
-  'who does wei chen report to?',
-]
-
 const WHY_COPY = {
   entity: 'nothing in the loaded files mentions what you asked about',
   coverage: 'the thing exists in your files, but nobody recorded this about it',
@@ -19,12 +9,21 @@ const WHY_COPY = {
 
 export default function Chat({ people }) {
   const [question, setQuestion] = useState('')
+  const [suggested, setSuggested] = useState([])
   const [asOf, setAsOf] = useState('')
   const [turns, setTurns] = useState([])
   const [busy, setBusy] = useState(false)
   const endRef = useRef(null)
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [turns, busy])
+
+  // Built from whatever is loaded right now, so they always hit real subjects.
+  useEffect(() => {
+    fetch('/api/suggestions')
+      .then((r) => r.json())
+      .then((d) => setSuggested(d.suggestions || []))
+      .catch(() => {})
+  }, [])
 
   async function ask(q) {
     const text = (q || question).trim()
@@ -65,12 +64,19 @@ export default function Chat({ people }) {
       </div>
 
       <div className="composer">
-        {turns.length === 0 && (
-          <div className="suggest">
-            {SUGGESTED.map((s) => (
-              <button key={s} onClick={() => ask(s)}>{s}</button>
-            ))}
-          </div>
+        {turns.length === 0 && suggested.length > 0 && (
+          <>
+            <div className="label" style={{ marginBottom: 10 }}>
+              questions drawn from what you just loaded
+            </div>
+            <div className="suggest">
+              {suggested.map((s) => (
+                <button key={s.q} onClick={() => ask(s.q)}>
+                  {s.q}<span className="tag">{s.tag}</span>
+                </button>
+              ))}
+            </div>
+          </>
         )}
         <div className="row">
           <input
