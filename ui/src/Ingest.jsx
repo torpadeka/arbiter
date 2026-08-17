@@ -14,6 +14,7 @@ function post(path, body) {
 export default function Ingest({ onReady, onChanged, ai }) {
   const [dataDir, setDataDir] = useState('data/raw')
   const [readProse, setReadProse] = useState(false)
+  const [deriveOntology, setDeriveOntology] = useState(true)
   const [job, setJob] = useState(null)
   const [kind, setKind] = useState('')
   const [log, setLog] = useState([])
@@ -109,23 +110,50 @@ export default function Ingest({ onReady, onChanged, ai }) {
           </button>
         </div>
 
+        <div className="label" style={{ marginTop: 26 }}>which vocabulary should it use</div>
+        <div className="choices">
+          <button className={`choice ${deriveOntology ? 'on' : ''}`} disabled={running}
+                  onClick={() => setDeriveOntology(true)}>
+            <span className="choice-title">work it out from my files</span>
+            <span className="choice-body prose">
+              For data it has never seen. Reads a sample and derives the relationships itself,
+              counting how many values each one holds.
+            </span>
+          </button>
+          <button className={`choice ${!deriveOntology ? 'on' : ''}`} disabled={running}
+                  onClick={() => setDeriveOntology(false)}>
+            <span className="choice-title">use the one shipped here</span>
+            <span className="choice-body prose">
+              A curated vocabulary for the nine common business tools, tuned so disagreements between
+              them are caught. Skips step 02.
+            </span>
+          </button>
+        </div>
+
         <div className="steps" style={{ marginTop: 30 }}>
           <Step n="01" done={cleared} title="clear what is loaded now"
                 hint="Empties the database so you start from nothing. Checks it is really empty before continuing.">
             <button className="pill" disabled={running} onClick={() => launch('/reset', {}, 'reset')}>clear</button>
           </Step>
 
-          <Step n="02" done={!!learned} title="work out what is in the files"
-                hint="Looks at a sample of your records and works out which fields hold ids, authors and dates, what kinds of things exist, and how they relate to each other. You can review the result before anything is stored.">
-            <button className="pill" disabled={running}
-                    onClick={() => launch('/induce', { data_dir: dataDir }, 'induce')}>read the files</button>
+          <Step n="02" done={!!learned || !deriveOntology}
+                title={deriveOntology ? 'work out what is in the files' : 'not needed, using the shipped vocabulary'}
+                hint={deriveOntology
+                  ? 'Looks at a sample of your records and works out which fields hold ids, authors and dates, what kinds of things exist, and how they relate to each other. You can review the result before anything is stored.'
+                  : 'Skipped. The shipped vocabulary already describes these tools.'}>
+            {deriveOntology && (
+              <button className="pill" disabled={running}
+                      onClick={() => launch('/induce', { data_dir: dataDir }, 'induce')}>read the files</button>
+            )}
           </Step>
 
           <Step n="03" done={!!built} title="build the knowledge graph"
                 hint="Reads every file, merges duplicate people, settles disagreements between sources, and stores the result so it can be questioned.">
-            <button className="pill" disabled={running || !learned}
-                    onClick={() => launch('/ingest', { tier_b: readProse }, 'ingest')}>build</button>
-            {!learned && <span className="hint prose">do step 02 first</span>}
+            <button className="pill" disabled={running || (deriveOntology && !learned)}
+                    onClick={() => launch('/ingest', {
+                      tier_b: readProse, use_builtin: !deriveOntology, data_dir: dataDir,
+                    }, 'ingest')}>build</button>
+            {deriveOntology && !learned && <span className="hint prose">do step 02 first</span>}
           </Step>
         </div>
 

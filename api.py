@@ -139,6 +139,8 @@ class IngestRequest(BaseModel):
     tier_b: bool = False
     source: str = "folder"      # folder | herb
     products: int | None = None
+    use_builtin: bool = False   # build with the ontology shipped here, not a derived one
+    data_dir: str = ""          # only needed when building without deriving first
 
 
 # --- pipeline: reset, induce, ingest ----------------------------------------
@@ -238,18 +240,26 @@ def ingest(request: IngestRequest) -> dict:
     """Parse, resolve, arbitrate and write the graph."""
     state = json.loads(STATE.read_text(encoding="utf-8")) if STATE.exists() else {}
 
-    if not state.get("schema"):
-        raise HTTPException(status_code=400, detail="no ontology yet: induce one from the folder first")
+    if not request.use_builtin and not state.get("schema"):
+        raise HTTPException(status_code=400, detail="no ontology yet: derive one from the folder first")
+
+    folder = request.data_dir or state.get("data_dir") or str(ROOT / "data" / "raw")
 
     def work() -> dict:
         from ingest.load import run as load_run
 
+        if request.use_builtin:
+            print(f"building with the ontology shipped with this project, over {folder}")
         graph = load_run(
             tier_b=request.tier_b,
             source="seed",
-            schema_path=state.get("schema"),
-            data_dir=state.get("data_dir"),
+            # None means the curated ontology in ontology/schema.yaml.
+            schema_path=None if request.use_builtin else state.get("schema"),
+            data_dir=folder,
         )
+        if request.use_builtin:
+            STATE.parent.mkdir(parents=True, exist_ok=True)
+            STATE.write_text(json.dumps({"data_dir": folder}, indent=2), encoding="utf-8")
         reset_engine()
         return graph_summary(graph)
 
