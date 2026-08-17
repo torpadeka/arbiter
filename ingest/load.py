@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 from collections import defaultdict
+from pathlib import Path
 
 from arbiter.policy import Decision, arbitrate
 from graph.hydra import HydraClient
@@ -31,7 +32,7 @@ from graph.models import (
     person_key,
     slugify,
 )
-from ingest.parse import load_corpus, tier_a_claims
+from ingest.parse import load_corpus, parse_record, tier_a_claims
 from resolve.align import AlignmentReport, align, known_from_tier_a
 from resolve.engine import Resolution, resolve_people
 
@@ -210,6 +211,32 @@ def write(g: GraphBuild, client: HydraClient) -> None:
         client.create_edges(rel_type, sorted(pairs))
 
 
+def read_folder(data_dir: Path, schema: Schema, verbose: bool = True) -> list[RawDoc]:
+    """Read a folder using the same profiler that induced the schema.
+
+    `init` understands nested JSON, sections, CSV and text, so `ingest` has to
+    read exactly what `init` saw. Reading only *.jsonl here would mean an
+    induced schema could describe sources the loader cannot open.
+    """
+    from ingest.induce import profile
+
+    docs: list[RawDoc] = []
+    skipped: list[str] = []
+    for source in profile(data_dir):
+        if source.tool not in schema.sources:
+            skipped.append(source.tool)
+            continue
+        for record in source.records:
+            try:
+                docs.append(parse_record(source.tool, record, schema))
+            except (ValueError, KeyError):
+                continue
+    if verbose and skipped:
+        print(f"  {len(skipped)} source(s) present in the folder but absent from the schema: "
+              f"{', '.join(skipped[:4])}{'…' if len(skipped) > 4 else ''}")
+    return docs
+
+
 # --- pipeline ---------------------------------------------------------------
 
 
@@ -220,8 +247,10 @@ def run(
     limit: int | None = None,
     source: str = "seed",
     products: int | None = None,
+    schema_path: str | Path | None = None,
+    data_dir: str | Path | None = None,
 ) -> GraphBuild:
-    schema = load_schema()
+    schema = load_schema(Path(schema_path)) if schema_path else load_schema()
     person_names: dict[str, str] = {}
 
     if source == "herb":
@@ -229,7 +258,7 @@ def run(
 
         docs, extracted, person_names = load_herb(products, schema, verbose=verbose)
     else:
-        docs = load_corpus(schema=schema)
+        docs = read_folder(Path(data_dir), schema, verbose) if data_dir else load_corpus(schema=schema)
         extracted = tier_a_claims(docs, schema)
 
     if tier_b:

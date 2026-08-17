@@ -1,0 +1,517 @@
+version: 1
+node_types:
+  Person:
+    key: person:{canonical}
+    desc: A human, after entity resolution
+  Alias:
+    key: alias:{surface}
+    desc: One observed surface form of a Person
+  Team:
+    key: team:{slug}
+    desc: A group of people
+  Project:
+    key: project:{slug}
+    desc: A named body of work
+  Account:
+    key: account:{slug}
+    desc: A customer or prospect org
+  Artifact:
+    key: artifact:{tool}:{doc_id}
+    desc: One source document
+  Decision:
+    key: decision:{slug}
+    desc: A resolved choice with an owner
+  Topic:
+    key: topic:{slug}
+    desc: A subject discussed across tools
+  Claim:
+    key: claim:{hash}
+    desc: One extracted statement, with provenance
+  Group:
+    key: group:{slug}
+    desc: ACL group; visibility unit
+artifact_kinds:
+- message
+- email
+- ticket
+- doc
+- pr
+- meeting
+- deal
+- transcript
+predicates:
+  ASSIGNED_TO:
+    domain:
+    - Artifact
+    - Project
+    range:
+    - Person
+    temporal: true
+    cardinality: many
+    description: Indicates the person responsible for handling or overseeing a project
+      or artifact.
+    observed_objects_per_subject: 1.55
+  CONTRIBUTED_TO:
+    domain:
+    - Person
+    range:
+    - Artifact
+    - Project
+    temporal: false
+    cardinality: many
+    description: Indicates work performed by a person on a project or artifact.
+    observed_objects_per_subject: 1.26
+  AUTHORED_BY:
+    domain:
+    - Artifact
+    - Project
+    range:
+    - Person
+    temporal: false
+    cardinality: many
+    description: Indicates the author of an artifact or project.
+    observed_objects_per_subject: 1.0
+  COMPETES_WITH:
+    domain:
+    - Artifact
+    - Project
+    range:
+    - Artifact
+    temporal: true
+    cardinality: many
+    description: Indicates competitive relationship between artifacts or projects.
+    observed_objects_per_subject: 2.5
+  UTILIZES:
+    domain:
+    - Project
+    - Artifact
+    range:
+    - Artifact
+    temporal: true
+    cardinality: many
+    description: Indicates a project or artifact utilizing another artifact.
+    observed_objects_per_subject: 2.0
+  DISCUSSES:
+    domain:
+    - Artifact
+    range:
+    - Project
+    - Artifact
+    temporal: false
+    cardinality: many
+    description: Indicates an artifact referencing or discussing a project.
+    observed_objects_per_subject: 1.0
+  FOCUSES_ON:
+    domain:
+    - Person
+    - Project
+    - Artifact
+    range:
+    - Topic
+    - Artifact
+    temporal: true
+    cardinality: one
+    description: Indicates the thematic focus or optimization goal.
+    observed_objects_per_subject: 1.0
+  HAS_STATE:
+    domain:
+    - Artifact
+    range:
+    - Topic
+    temporal: true
+    cardinality: one
+    description: Indicates the current lifecycle state of a record or pull request.
+    observed_objects_per_subject: 1.0
+  HAS_REVIEW_STATE:
+    domain:
+    - Artifact
+    range:
+    - Topic
+    temporal: true
+    cardinality: one
+    description: Indicates the code review state for a pull request or artifact.
+    observed_objects_per_subject: null
+structural_edges:
+- ALIAS_OF
+- ABOUT
+- OBJECT
+- SOURCED_FROM
+- ASSERTED_BY
+- SUPERSEDES
+- CONTRADICTS
+- VISIBLE_TO
+arbitration:
+  weights:
+    authority: 0.35
+    recency: 0.3
+    specificity: 0.15
+    corroboration: 0.15
+    hedging: -0.05
+  contested_margin: 0.05
+  source_authority:
+    actiongenie-slack: 0.5
+    actiongenie-documents: 0.85
+    actiongenie-meeting-transcripts: 0.65
+    actiongenie-meeting-chats: 0.5
+    actiongenie-urls: 0.8
+    actiongenie-prs: 0.9
+    anomalyforce-slack: 0.5
+    anomalyforce-documents: 0.8
+    anomalyforce-meeting-transcripts: 0.7
+    anomalyforce-urls: 0.8
+    anomalyforce-prs: 0.9
+    autotuneforce-slack: 0.5
+    autotuneforce-documents: 0.8
+    autotuneforce-meeting-transcripts: 0.65
+    autotuneforce-urls: 0.8
+    autotuneforce-prs: 0.9
+    coachforce-slack: 0.5
+    coachforce-documents: 0.85
+    coachforce-meeting-transcripts: 0.65
+    coachforce-meeting-chats: 0.5
+    coachforce-urls: 0.8
+    coachforce-prs: 0.9
+    collaborateforce-slack: 0.5
+    collaborateforce-documents: 0.8
+    collaborateforce-meeting-transcripts: 0.65
+    collaborateforce-urls: 0.8
+    collaborateforce-prs: 0.9
+  hedging_markers:
+  - i think
+  - maybe
+  - probably
+  - not sure
+  - iirc
+  - afaik
+  - might
+  - tentatively
+retrieval:
+  max_hops: 3
+  path_count: 5
+  sufficiency_threshold: 0.35
+sources:
+  actiongenie-slack:
+    artifact_kind: message
+    doc_id: id
+    body: Message.User.text
+    author: Message.User.userId
+    created_at: Message.User.timestamp
+    acl:
+    - Channel.name
+    - Channel.channelID
+    rules: []
+  actiongenie-documents:
+    artifact_kind: doc
+    doc_id: id
+    title: type
+    body: content
+    author: author
+    created_at: date
+    updated_at: date
+    acl: []
+    rules:
+    - subject: __self__
+      subject_type: Artifact
+      predicate: AUTHORED_BY
+      object: author
+      object_type: Person
+      asserted_at: date
+  actiongenie-meeting-transcripts:
+    artifact_kind: transcript
+    doc_id: id
+    title: document_type
+    body: transcript
+    created_at: date
+    acl: []
+    participants:
+    - participants
+    rules: []
+  actiongenie-meeting-chats:
+    artifact_kind: message
+    doc_id: id
+    body: text
+    acl: []
+    rules: []
+  actiongenie-urls:
+    artifact_kind: doc
+    doc_id: id
+    title: link
+    body: description
+    acl: []
+    rules: []
+  actiongenie-prs:
+    artifact_kind: pr
+    doc_id: id
+    title: title
+    body: summary
+    author: user.login
+    created_at: created_at
+    acl: []
+    participants:
+    - reviews.user.login
+    rules:
+    - subject: __self__
+      subject_type: Artifact
+      predicate: AUTHORED_BY
+      object: user.login
+      object_type: Person
+      asserted_at: created_at
+    - subject: __self__
+      subject_type: Artifact
+      predicate: HAS_STATE
+      object: state
+      object_type: Topic
+      asserted_at: created_at
+    - subject: __self__
+      subject_type: Artifact
+      predicate: HAS_REVIEW_STATE
+      object: reviews.state
+      object_type: Topic
+      asserted_at: reviews.submitted_at
+  anomalyforce-slack:
+    artifact_kind: message
+    doc_id: id
+    body: Message.User.text
+    author: Message.User.userId
+    created_at: Message.User.timestamp
+    acl:
+    - Channel.name
+    - Channel.channelID
+    rules: []
+  anomalyforce-documents:
+    artifact_kind: doc
+    doc_id: id
+    title: type
+    body: content
+    author: author
+    created_at: date
+    acl: []
+    rules:
+    - subject: __self__
+      subject_type: Artifact
+      predicate: AUTHORED_BY
+      object: author
+      object_type: Person
+      asserted_at: date
+  anomalyforce-meeting-transcripts:
+    artifact_kind: meeting
+    doc_id: id
+    title: document_type
+    body: transcript
+    created_at: date
+    acl: []
+    participants:
+    - participants
+    rules: []
+  anomalyforce-urls:
+    artifact_kind: doc
+    doc_id: id
+    title: link
+    body: description
+    acl: []
+    rules: []
+  anomalyforce-prs:
+    artifact_kind: pr
+    doc_id: id
+    title: title
+    body: summary
+    author: user.login
+    created_at: created_at
+    acl: []
+    participants:
+    - reviews.user.login
+    rules:
+    - subject: __self__
+      subject_type: Artifact
+      predicate: AUTHORED_BY
+      object: user.login
+      object_type: Person
+      asserted_at: created_at
+  autotuneforce-slack:
+    artifact_kind: message
+    doc_id: id
+    body: Message.User.text
+    author: Message.User.userId
+    created_at: Message.User.timestamp
+    acl:
+    - Channel.name
+    - Channel.channelID
+    rules: []
+  autotuneforce-documents:
+    artifact_kind: doc
+    doc_id: id
+    title: type
+    body: content
+    author: author
+    created_at: date
+    acl: []
+    rules:
+    - subject: __self__
+      subject_type: Artifact
+      predicate: AUTHORED_BY
+      object: author
+      object_type: Person
+      asserted_at: date
+  autotuneforce-meeting-transcripts:
+    artifact_kind: transcript
+    doc_id: id
+    title: document_type
+    body: transcript
+    created_at: date
+    acl: []
+    participants:
+    - participants
+    rules: []
+  autotuneforce-urls:
+    artifact_kind: doc
+    doc_id: id
+    title: link
+    body: description
+    acl: []
+    rules: []
+  autotuneforce-prs:
+    artifact_kind: pr
+    doc_id: id
+    title: title
+    body: summary
+    author: user.login
+    created_at: created_at
+    acl: []
+    participants:
+    - reviews.user.login
+    rules:
+    - subject: __self__
+      subject_type: Artifact
+      predicate: AUTHORED_BY
+      object: user.login
+      object_type: Person
+      asserted_at: created_at
+    - subject: __self__
+      subject_type: Artifact
+      predicate: HAS_STATE
+      object: state
+      object_type: Topic
+  coachforce-slack:
+    artifact_kind: message
+    doc_id: id
+    body: Message.User.text
+    author: Message.User.userId
+    created_at: Message.User.timestamp
+    acl:
+    - Channel.channelID
+    - Channel.name
+    rules: []
+  coachforce-documents:
+    artifact_kind: doc
+    doc_id: id
+    title: type
+    body: content
+    author: author
+    created_at: date
+    updated_at: date
+    acl: []
+    rules:
+    - subject: __self__
+      subject_type: Artifact
+      predicate: AUTHORED_BY
+      object: author
+      object_type: Person
+      asserted_at: date
+  coachforce-meeting-transcripts:
+    artifact_kind: transcript
+    doc_id: id
+    title: document_type
+    body: transcript
+    created_at: date
+    acl: []
+    participants:
+    - participants
+    rules: []
+  coachforce-meeting-chats:
+    artifact_kind: message
+    doc_id: id
+    body: text
+    acl: []
+    rules: []
+  coachforce-urls:
+    artifact_kind: doc
+    doc_id: id
+    body: description
+    acl: []
+    rules: []
+  coachforce-prs:
+    artifact_kind: pr
+    doc_id: id
+    title: title
+    body: summary
+    author: user.login
+    created_at: created_at
+    acl: []
+    participants:
+    - reviews.user.login
+    rules:
+    - subject: __self__
+      subject_type: Artifact
+      predicate: AUTHORED_BY
+      object: user.login
+      object_type: Person
+      asserted_at: created_at
+  collaborateforce-slack:
+    artifact_kind: message
+    doc_id: id
+    body: Message.User.text
+    author: Message.User.userId
+    created_at: Message.User.timestamp
+    acl:
+    - Channel.name
+    - Channel.channelID
+    rules: []
+  collaborateforce-documents:
+    artifact_kind: doc
+    doc_id: id
+    title: type
+    body: content
+    author: author
+    created_at: date
+    acl: []
+    rules:
+    - subject: __self__
+      subject_type: Artifact
+      predicate: AUTHORED_BY
+      object: author
+      object_type: Person
+      asserted_at: date
+  collaborateforce-meeting-transcripts:
+    artifact_kind: transcript
+    doc_id: id
+    title: document_type
+    body: transcript
+    created_at: date
+    acl: []
+    participants:
+    - participants
+    rules: []
+  collaborateforce-urls:
+    artifact_kind: doc
+    doc_id: id
+    title: link
+    body: description
+    acl: []
+    rules: []
+  collaborateforce-prs:
+    artifact_kind: pr
+    doc_id: id
+    title: title
+    body: summary
+    author: user.login
+    created_at: created_at
+    acl: []
+    participants:
+    - reviews.user.login
+    rules:
+    - subject: __self__
+      subject_type: Artifact
+      predicate: AUTHORED_BY
+      object: user.login
+      object_type: Person
+      asserted_at: created_at

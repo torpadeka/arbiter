@@ -76,7 +76,32 @@ Answerable questions ask for *sets* ("the authors and key reviewers of the Marke
 - **Documents are cited by URL**, not by field, as in `<https://…/docs/onforcex_market_research_report|Market Research Report>`, so citations become `REFERENCES` edges from every message in the citing conversation.
 - **People are identifiers, not names.** Slack and documents use `eid_13fdff84`, GitHub PRs use `EMP_615921487`. There is no evidence linking the two schemes, so entity resolution keeps them apart (350 `eid_*` and 144 `EMP_*` in one product) rather than inventing a merge. The org chart in `salesforce_team.json` then makes `REPORTS_TO` deterministic: 295 claims, no LLM.
 
-## Quickstart
+## Use it on your own data
+
+No schema to write. Point it at a folder and it derives the ontology:
+
+```powershell
+powershell -File scripts\hydradb_up.ps1
+python cli.py init ./mydata        # profile, induce an ontology, write it out
+python cli.py ingest               # parse, resolve, arbitrate, write the graph
+python cli.py ask "who owns the migration?"
+```
+
+`init` reads `.jsonl`, `.json` (a list, a file of sections, or an id-keyed map), `.csv`, and plain text, then runs five stages. Every LLM output is validated against the data before it is accepted, and anything that fails validation is dropped rather than written into the schema:
+
+| Stage | What it does | How it is checked |
+|---|---|---|
+| profile | Flattens sample records into dotted paths with example values | n/a |
+| envelope | Maps each source's paths onto the document envelope (id, title, body, author, timestamps, acl) | Every path must resolve on real records |
+| vocabulary | Extracts with an *open* vocabulary over sampled prose, then clusters raw phrases into canonical predicates. The structured field inventory is fed in alongside, because assignment, status and due dates live in fields rather than prose | Predicates must have a domain and range |
+| cardinality | **Counted, not asked.** Distinct objects per (subject, predicate) across every tier-A claim in the corpus. Consistently one means functional, so competing values arbitrate | Measured on the full corpus, not a sample |
+| rules | Maps structured fields onto the induced predicates so tier A covers everything with no LLM | Paths must resolve, predicates must exist, types must respect domain and range |
+
+The induced ontology is written to `ontology/generated.yaml` and printed before ingest, so a wrong cardinality is something you see rather than something you discover later through missing contradictions. Edit it and re-run `ingest` at any time. `.arbiter/state.json` remembers which schema the graph was built with, so `ask` always queries with the ontology that produced it.
+
+Getting cardinality right matters more than it sounds. Mark a multi-valued predicate functional and every second value looks like a contradiction; mark a functional one multi-valued and real contradictions are never detected. Counting it beats guessing, and it beat my own hand-authoring, which got it wrong twice.
+
+## Quickstart with the bundled corpus
 
 Requires Docker and Python 3.10+.
 

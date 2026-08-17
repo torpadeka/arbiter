@@ -82,9 +82,27 @@ class LexicalBaseline:
 # --- runner ------------------------------------------------------------------
 
 
-def run(use_model: bool = False) -> dict:
+def active_schema(explicit: str = ""):
+    """Score against whatever ontology the graph was actually built with.
+
+    After `cli.py init`, that is an induced schema rather than the hand-written
+    one, and evaluating with the wrong vocabulary would measure nothing.
+    """
+    from graph.models import load_schema
+
+    path = explicit
+    if not path:
+        try:
+            state = json.loads((Path(__file__).resolve().parents[1] / ".arbiter" / "state.json").read_text())
+            path = state.get("schema", "")
+        except (OSError, ValueError):
+            path = ""
+    return load_schema(Path(path)) if path and Path(path).exists() else load_schema()
+
+
+def run(use_model: bool = False, schema_path: str = "") -> dict:
     questions = yaml.safe_load(QUESTIONS.read_text(encoding="utf-8"))
-    engine = Engine()
+    engine = Engine(schema=active_schema(schema_path))
     baseline = LexicalBaseline()
 
     # Questions answerable only from free text are skipped when the graph was
@@ -183,7 +201,8 @@ def summarize(rows: list[dict], latencies: list[float]) -> dict:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Run the Arbiter evaluation")
-    ap.add_argument("--model", action="store_true", help="render answers with the LLM (needs ANTHROPIC_API_KEY)")
+    ap.add_argument("--model", action="store_true", help="render answers with the LLM")
+    ap.add_argument("--schema", default="", help="score against a specific ontology file")
     args = ap.parse_args()
-    res = run(use_model=args.model)
+    res = run(use_model=args.model, schema_path=args.schema)
     raise SystemExit(0 if res["overall"] == 1.0 else 1)

@@ -18,12 +18,15 @@ loose JSON mode fall back to schema-in-prompt plus client-side validation, and
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import random
 import re
+import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 import httpx
 
@@ -52,8 +55,36 @@ PRESETS: dict[str, tuple[str, str, bool]] = {
 RETRY_STATUS = {408, 409, 429, 500, 502, 503, 504}
 
 
+CACHE_DIR = Path(__file__).resolve().parent / "data" / "cache" / "llm"
+
+
 class LLMError(RuntimeError):
     pass
+
+
+class RateLimiter:
+    """Process-wide request pacing.
+
+    Free tiers reject bursts outright, and a rejected request still costs
+    wall-clock through the retry backoff, so pacing up front is cheaper than
+    retrying. Shared across every client instance because the quota is.
+    """
+
+    _lock = threading.Lock()
+    _next = 0.0
+
+    @classmethod
+    def wait(cls, rpm: int) -> None:
+        if rpm <= 0:
+            return
+        interval = 60.0 / rpm
+        with cls._lock:
+            now = time.monotonic()
+            start = max(now, cls._next)
+            cls._next = start + interval
+        delay = start - now
+        if delay > 0:
+            time.sleep(delay)
 
 
 @dataclass
@@ -113,6 +144,7 @@ class LLM:
         """
         last = ""
         for attempt in range(self.cfg.max_attempts):
+            RateLimiter.wait(int(os.getenv("LLM_RPM", "10")))
             try:
                 resp = self._http.post(path, json=body)
             except httpx.TransportError as exc:
@@ -131,8 +163,30 @@ class LLM:
 
     # --- operations --------------------------------------------------------
 
-    def structured(self, system: str, user: str, schema: dict, max_tokens: int = 4096) -> dict:
-        """Return JSON conforming to `schema`."""
+    def structured(self, system: str, user: str, schema: dict, max_tokens: int = 4096, cache: bool = False) -> dict:
+        """Return JSON conforming to `schema`.
+
+        With `cache=True` the result is stored on a content hash, so re-running
+        an expensive multi-call pass (schema induction) costs nothing the second
+        time and survives an interrupted run.
+        """
+        cache_path = None
+        if cache:
+            digest = hashlib.blake2b(
+                f"{self.cfg.model}|{system}|{user}|{json.dumps(schema, sort_keys=True)}".encode("utf-8"),
+                digest_size=16,
+            ).hexdigest()
+            cache_path = CACHE_DIR / f"{digest}.json"
+            if cache_path.exists():
+                return json.loads(cache_path.read_text(encoding="utf-8"))
+
+        result = self._structured(system, user, schema, max_tokens)
+        if cache_path is not None:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            cache_path.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
+        return result
+
+    def _structured(self, system: str, user: str, schema: dict, max_tokens: int = 4096) -> dict:
         if self.cfg.provider == "anthropic":
             payload = self._post("/v1/messages", {
                 "model": self.cfg.model,

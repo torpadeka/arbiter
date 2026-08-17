@@ -1,13 +1,13 @@
-"""Arbiter CLI — ask the graph a question and see exactly how it answered.
+"""Arbiter CLI. Ask the graph a question and see exactly how it answered.
 
-    python cli.py ask "who is ENG-4471 assigned to?"
-    python cli.py ask "when does Atlas launch?" --as-of 2026-03-01
-    python cli.py ask "what is the Atlas budget?"
-    python cli.py entities
-    python cli.py stats
+    python cli.py init ./mydata            derive an ontology from a folder
+    python cli.py ingest                   build the graph from it
+    python cli.py ask "who owns Atlas?"    query it
+    python cli.py entities                 canonical entities + merge evidence
+    python cli.py stats                    graph node counts
 
 Every answer prints its provenance: the traversal path, the claims cited with
-their sources, and — when sources disagreed — which claim won and why.
+their sources, and, when sources disagreed, which claim won and why.
 """
 
 from __future__ import annotations
@@ -26,8 +26,29 @@ from rich.text import Text
 
 from answer.engine import Answer, Engine, Evidence
 from graph.hydra import HydraClient
+from graph.models import load_schema
 
 console = Console()
+
+STATE = Path(__file__).resolve().parent / ".arbiter" / "state.json"
+
+
+def read_state() -> dict:
+    """What was last ingested, so `ask` uses the schema the graph was built with."""
+    try:
+        return json.loads(STATE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def write_state(**values) -> None:
+    STATE.parent.mkdir(parents=True, exist_ok=True)
+    STATE.write_text(json.dumps({**read_state(), **values}, indent=2), encoding="utf-8")
+
+
+def active_schema():
+    path = read_state().get("schema")
+    return load_schema(Path(path)) if path and Path(path).exists() else load_schema()
 
 TOOL_STYLE = {
     "jira": "blue", "linear": "blue", "github": "magenta", "hubspot": "cyan",
@@ -133,8 +154,48 @@ def write_graph(ans: Answer, path: Path) -> None:
     )
 
 
+def cmd_init(args: argparse.Namespace) -> int:
+    """Point Arbiter at a folder and let it derive the ontology."""
+    from ingest.induce import run as induce
+
+    data_dir = Path(args.data_dir).resolve()
+    if not data_dir.is_dir():
+        console.print(f"[red]{data_dir} is not a directory[/]")
+        return 1
+
+    out = Path(args.out).resolve() if args.out else Path(__file__).resolve().parent / "ontology" / "generated.yaml"
+    schema = induce(data_dir, out, vocab_docs=args.vocab_docs)
+    write_state(schema=str(out), data_dir=str(data_dir))
+
+    console.print(Panel(
+        f"  sources    {len(schema['sources'])}\n"
+        f"  predicates {len(schema['predicates'])}\n"
+        f"  rules      {sum(len(b['rules']) for b in schema['sources'].values())}\n\n"
+        f"  schema written to {out}\n"
+        f"  review it, then run: [bold]python cli.py ingest[/]",
+        title="[green]ONTOLOGY INDUCED[/]", border_style="green", padding=(1, 2),
+    ))
+    return 0
+
+
+def cmd_ingest(args: argparse.Namespace) -> int:
+    from ingest.load import run as load
+
+    state = read_state()
+    schema_path = args.schema or state.get("schema")
+    data_dir = args.data_dir or state.get("data_dir")
+    if not schema_path or not data_dir:
+        console.print("[red]nothing to ingest. Run: python cli.py init <folder>[/]")
+        return 1
+
+    load(tier_b=args.tier_b, limit=args.limit, schema_path=schema_path, data_dir=data_dir)
+    write_state(schema=str(schema_path), data_dir=str(data_dir))
+    console.print("\n[green]ready.[/] ask a question: [bold]python cli.py ask \"...\"[/]")
+    return 0
+
+
 def cmd_ask(args: argparse.Namespace) -> int:
-    engine = Engine()
+    engine = Engine(schema=active_schema())
     ans = engine.ask(args.question, as_of=args.as_of, max_hops=args.hops, use_model=not args.no_model)
     if args.json:
         print(json.dumps({
@@ -199,6 +260,19 @@ def cmd_stats(_: argparse.Namespace) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(prog="arbiter", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="command", required=True)
+
+    init = sub.add_parser("init", help="point Arbiter at a folder and derive an ontology from it")
+    init.add_argument("data_dir", help="folder of exports (jsonl, json, csv, md)")
+    init.add_argument("--out", default="", help="where to write the induced schema")
+    init.add_argument("--vocab-docs", type=int, default=40, help="documents sampled for vocabulary discovery")
+    init.set_defaults(func=cmd_init)
+
+    ingest = sub.add_parser("ingest", help="build the graph using the induced ontology")
+    ingest.add_argument("--schema", default="", help="schema file (defaults to the last induced one)")
+    ingest.add_argument("--data-dir", default="", help="corpus folder (defaults to the last used one)")
+    ingest.add_argument("--tier-b", action="store_true", help="also extract claims from free text with an LLM")
+    ingest.add_argument("--limit", type=int, default=None)
+    ingest.set_defaults(func=cmd_ingest)
 
     ask = sub.add_parser("ask", help="ask a question")
     ask.add_argument("question")

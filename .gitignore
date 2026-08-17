@@ -36,6 +36,10 @@ dist/
 # Eval outputs
 eval/results/
 
+# Induced schema and CLI state, both generated from whatever corpus is loaded
+ontology/generated.yaml
+.arbiter/
+
 # OS
 .DS_Store
 Thumbs.db

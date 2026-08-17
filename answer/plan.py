@@ -243,6 +243,17 @@ def detect_predicates(question: str, schema: Schema) -> list[str]:
             for p in predicates:
                 if p in schema.predicates and p not in out:
                     out.append(p)
+
+    # Hints derived from the vocabulary itself, so an induced ontology is
+    # queryable without anyone writing a phrase table for it. REPORTS_TO
+    # matches "reports to" and "reports"; BUDGET_IS matches "budget".
+    for name in schema.predicate_names:
+        if name in out:
+            continue
+        phrase = name.lower().replace("_", " ")
+        head = phrase.split()[0]
+        if phrase in q or (len(head) > 3 and re.search(rf"\b{re.escape(head)}", q)):
+            out.append(name)
     return out
 
 
@@ -265,11 +276,20 @@ def detect_as_of(question: str) -> str:
 def plan(question: str, index: EntityIndex, schema: Schema | None = None, as_of: str = "") -> QueryPlan:
     schema = schema or load_schema()
     entities, unmatched = index.match(question)
+    predicates = detect_predicates(question, schema)
+
+    # Words that named a matched predicate are explained, whether they came from
+    # the hint table or from the vocabulary itself. Without this an induced
+    # schema trips its own gate: AUTHORED_BY matches "authored", then "authored"
+    # is counted as an unexplained term and the question is declined.
+    predicate_tokens = {t for name in predicates for t in norm(name).split()}
+    unmatched = [t for t in unmatched if t not in predicate_tokens]
+
     lowered = question.lower()
     return QueryPlan(
         question=question,
         entities=entities,
-        predicates=detect_predicates(question, schema),
+        predicates=predicates,
         as_of=as_of or detect_as_of(question),
         unmatched_terms=unmatched,
         set_mode=any(cue in lowered for cue in SET_CUES),
