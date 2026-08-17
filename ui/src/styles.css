@@ -77,10 +77,14 @@ button { font: inherit; letter-spacing: inherit; text-transform: inherit; cursor
    never loses contrast, and a solid veil rather than a gradient, since the
    system forbids colour transitions.
 
-   Blur is tuned to the footage rather than fixed. A heavy blur suits smoke or
-   liquid, but it erases thin high contrast marks: at 30px the current clip of
-   falling streaks disappeared completely. If a backdrop looks like nothing is
-   there, lower the blur before raising the opacity. */
+   Blur is tuned to the footage rather than fixed, and the numbers below were
+   measured rather than guessed. A heavy blur suits smoke or liquid, but it
+   destroys thin high contrast marks: this clip is falling streaks, and at 7px
+   the brightest pixel in an empty region reached only 32 of 255 against a base
+   of 22, a spread no monitor shows. At 2px the same pixel reaches 78. If a
+   backdrop looks like nothing is there, lower the blur before raising opacity:
+   blur spreads a thin streak over ten times its width and takes its peak with
+   it. Sample an empty strip and compare min against max before deciding. */
 
 .atmosphere {
   position: fixed;
@@ -88,8 +92,8 @@ button { font: inherit; letter-spacing: inherit; text-transform: inherit; cursor
   width: 116%;
   height: 116%;
   object-fit: cover;
-  filter: blur(7px) saturate(1);
-  opacity: 0.5;
+  filter: blur(2px) saturate(1) brightness(1.15);
+  opacity: 0.85;
   z-index: -2;
   pointer-events: none;
 }
@@ -98,7 +102,7 @@ button { font: inherit; letter-spacing: inherit; text-transform: inherit; cursor
   position: fixed;
   inset: 0;
   background: var(--color-void-black);
-  opacity: 0.42;
+  opacity: 0.3;
   z-index: -1;
   pointer-events: none;
 }
