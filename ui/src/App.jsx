@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import Ingest from './Ingest.jsx'
 import Chat from './Chat.jsx'
+import HowItWorks from './HowItWorks.jsx'
+import Mark from './Mark.jsx'
 
 /** Optional ambient backdrop.
  *
@@ -69,7 +71,7 @@ export default function App() {
 
   // Questions do not exist before a corpus does. An empty graph has nothing to
   // be asked about, and offering a chat box would imply otherwise.
-  useEffect(() => { if (!loaded) setView('ingest') }, [loaded])
+  useEffect(() => { if (!loaded && view === 'chat') setView('ingest') }, [loaded, view])
 
   return (
     <div className={atmosphere ? 'has-atmosphere' : ''}>
@@ -86,7 +88,7 @@ export default function App() {
       <div className="shell">
         <header className="head">
           <div className="mark">
-            <Constellation />
+            <Mark size={44} />
             <div>
               <div className="wordmark">arbiter</div>
               <div className="tagline">what is currently true, who established it, and when</div>
@@ -100,11 +102,19 @@ export default function App() {
                 <span className="lbl">{LABEL_COPY[k] || k.toLowerCase()}</span>
               </span>
             ))}
-            {loaded && (
-              <button className="pill" onClick={() => setView(view === 'chat' ? 'ingest' : 'chat')}>
-                {view === 'chat' ? 'load other data' : 'ask questions'}
+            <nav className="tabs">
+              <button className={`pill ${view === 'ingest' ? 'ember' : ''}`} onClick={() => setView('ingest')}>
+                load data
               </button>
-            )}
+              {loaded && (
+                <button className={`pill ${view === 'chat' ? 'ember' : ''}`} onClick={() => setView('chat')}>
+                  ask
+                </button>
+              )}
+              <button className={`pill ${view === 'how' ? 'ember' : ''}`} onClick={() => setView('how')}>
+                how it works
+              </button>
+            </nav>
           </div>
         </header>
 
@@ -114,25 +124,13 @@ export default function App() {
 
         {view === 'chat' && loaded && <Chat people={people} />}
 
+        {view === 'how' && <HowItWorks stats={stats} />}
+
         <footer className="foot">
           every answer is traced back to the document it came from. when your files do not hold the
           answer, this says so instead of guessing. built on hydradb.
         </footer>
       </div>
     </div>
-  )
-}
-
-/** Four point mark: a centred diamond with extending points, thin strokes only. */
-function Constellation() {
-  return (
-    <svg width="42" height="42" viewBox="0 0 42 42" fill="none" aria-hidden="true">
-      <rect x="21" y="12.5" width="12" height="12" transform="rotate(45 21 12.5)"
-            stroke="#ffffff" strokeWidth="1" />
-      <path d="M21 2 L23 9 L21 11 L19 9 Z" stroke="#cc6437" strokeWidth="1" />
-      <path d="M21 40 L23 33 L21 31 L19 33 Z" stroke="#ffffff" strokeWidth="1" />
-      <path d="M2 21 L9 23 L11 21 L9 19 Z" stroke="#ffffff" strokeWidth="1" />
-      <path d="M40 21 L33 23 L31 21 L33 19 Z" stroke="#ffffff" strokeWidth="1" />
-    </svg>
   )
 }

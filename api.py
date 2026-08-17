@@ -297,6 +297,38 @@ def stats() -> dict:
     }
 
 
+@app.get("/api/ontology")
+def ontology() -> dict:
+    """The rules the loaded graph is actually running on.
+
+    Served rather than hardcoded in the UI so the explanation page describes the
+    ontology in force, including an induced one, instead of a description that
+    can drift away from the code.
+    """
+    schema = active_schema()
+    arb = schema.arbitration
+    return {
+        "predicates": [
+            {
+                "name": name,
+                "domain": spec.get("domain", []),
+                "range": spec.get("range", []),
+                "cardinality": spec.get("cardinality", "many"),
+                "temporal": bool(spec.get("temporal")),
+                "observed": spec.get("observed_objects_per_subject"),
+            }
+            for name, spec in sorted(schema.predicates.items())
+        ],
+        "weights": arb.get("weights", {}),
+        "authority": dict(sorted(arb.get("source_authority", {}).items(), key=lambda kv: -kv[1])),
+        "contested_margin": arb.get("contested_margin"),
+        "sufficiency_threshold": schema.retrieval.get("sufficiency_threshold"),
+        "max_hops": schema.retrieval.get("max_hops"),
+        "sources": sorted(schema.sources),
+        "structural_edges": schema.structural_edges,
+    }
+
+
 @app.get("/api/entities")
 def entities(limit: int = 40) -> dict:
     rows = HydraClient().scan(

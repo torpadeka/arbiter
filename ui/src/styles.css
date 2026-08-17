@@ -358,3 +358,53 @@ footer.foot { margin-top: 80px; padding-top: 20px; border-top: 1px solid var(--h
 /* Suggested questions carry a small tag naming what each one demonstrates. */
 .suggest button { display: inline-flex; gap: 10px; align-items: center; }
 .suggest .tag { color: var(--color-ember-rust); font-family: var(--font-mono); font-size: 10px; letter-spacing: -0.2px; text-transform: none; }
+
+/* --- explanation page ---------------------------------------------------- */
+
+.card.explain { margin-top: 20px; }
+.card.explain .label { color: var(--color-pure-white); margin-bottom: 20px; }
+.dimmed { color: var(--dimmer); margin: 20px 0 0; line-height: 1.5; max-width: 780px; }
+
+.flow { display: flex; align-items: stretch; flex-wrap: wrap; gap: 0; }
+.flow-step { display: flex; align-items: center; }
+.flow-node {
+  display: flex; flex-direction: column; gap: 4px;
+  border: 1px solid var(--hairline); border-radius: var(--radius-card);
+  padding: 14px 16px; min-width: 132px;
+}
+.flow-title { color: var(--color-pure-white); }
+.flow-sub { color: var(--dimmer); font-size: 11.5px; line-height: 1.3; }
+.flow-arrow { width: 26px; height: 1px; background: var(--color-ember-rust); margin: 0 2px; flex: 0 0 auto; }
+
+.diagram { width: 100%; height: auto; max-width: 660px; }
+.diagram text { text-transform: uppercase; letter-spacing: -0.28px; }
+.d-title { fill: var(--color-ember-rust); font-size: 12px; font-family: var(--font-cond); }
+.d-sub { fill: var(--dimmer); font-size: 10px; font-family: var(--font-mono); text-transform: none; }
+.d-label { fill: rgba(255,255,255,0.6); font-size: 11px; font-family: var(--font-cond); }
+
+.alias-demo { display: flex; flex-direction: column; gap: 14px; }
+.alias-names { display: flex; gap: 8px; flex-wrap: wrap; }
+.alias-join { width: 1px; height: 18px; background: var(--color-ember-rust); margin-left: 18px; }
+.alias-veto { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.alias-block {
+  color: var(--color-ember-rust); border-bottom: 1px solid var(--color-ember-rust);
+  padding-bottom: 2px; font-size: 11px;
+}
+
+.weights { display: flex; flex-direction: column; gap: 10px; }
+.weight { display: flex; align-items: center; gap: 14px; }
+.w-name { flex: 0 0 118px; color: var(--dim); }
+.w-bar { flex: 0 0 190px; height: 1px; background: var(--hairline-soft); position: relative; }
+.w-fill { position: absolute; left: 0; top: 0; height: 1px; background: var(--color-pure-white); }
+.w-fill.neg { background: var(--color-ember-rust); }
+.w-value { flex: 0 0 46px; color: var(--color-pure-white); }
+.w-copy { color: var(--dimmer); flex: 1; min-width: 0; }
+.authority .weight { gap: 14px; }
+
+.gates { display: flex; flex-direction: column; gap: 18px; }
+.gate { display: flex; gap: 18px; align-items: flex-start; }
+.gate-title { color: var(--color-pure-white); }
+.gate-rule { color: var(--dim); margin-top: 4px; }
+.gate-example { color: var(--color-ember-rust); margin-top: 6px; text-transform: none; }
+
+nav.tabs { display: flex; gap: 8px; }
