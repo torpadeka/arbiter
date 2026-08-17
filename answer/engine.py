@@ -385,7 +385,7 @@ class Engine:
         subject = self.label(top.claim.subject_key)
         obj = self.label(top.claim.object_key) or top.claim.object_literal
         predicate = top.claim.predicate.replace("_", " ").lower()
-        line = f"{subject} — {predicate} → {obj}"
+        line = f"{subject} : {predicate} : {obj}"
         # Corroborating sources agree on the object; listing it again reads as a
         # second answer rather than as extra support for the same one.
         others = []
