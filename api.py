@@ -297,6 +297,77 @@ def stats() -> dict:
     }
 
 
+READABLE_SUFFIXES = {".jsonl", ".ndjson", ".json", ".csv", ".md", ".txt", ".text"}
+
+
+def _readable_count(folder: Path, cap: int = 400) -> int:
+    """Readable files at most two levels down, bounded.
+
+    Bounded on purpose: an unbounded walk of a large tree would hang the folder
+    browser on the first click into a home directory.
+    """
+    total = 0
+    try:
+        for child in folder.iterdir():
+            if child.is_file() and child.suffix.lower() in READABLE_SUFFIXES:
+                total += 1
+            elif child.is_dir() and not child.name.startswith("."):
+                try:
+                    for grandchild in child.iterdir():
+                        if grandchild.is_file() and grandchild.suffix.lower() in READABLE_SUFFIXES:
+                            total += 1
+                            if total >= cap:
+                                return total
+                except (PermissionError, OSError):
+                    continue
+            if total >= cap:
+                return total
+    except (PermissionError, OSError):
+        return total
+    return total
+
+
+@app.get("/api/browse")
+def browse(path: str = "") -> dict:
+    """List folders so the UI can offer a picker.
+
+    A browser cannot give a server a filesystem path: a directory input hands
+    over file contents, not locations, and ingestion reads from disk. So the
+    server does the browsing and the UI navigates it.
+    """
+    target = Path(path).expanduser() if path else ROOT
+    if not target.exists() or not target.is_dir():
+        target = ROOT
+    target = target.resolve()
+
+    folders = []
+    try:
+        for child in sorted(target.iterdir(), key=lambda p: p.name.lower()):
+            if child.is_dir() and not child.name.startswith("."):
+                folders.append({"name": child.name, "path": str(child), "files": _readable_count(child)})
+    except (PermissionError, OSError) as exc:
+        raise HTTPException(status_code=400, detail=f"cannot read that folder: {exc}") from None
+
+    here = 0
+    try:
+        here = sum(1 for f in target.iterdir() if f.is_file() and f.suffix.lower() in READABLE_SUFFIXES)
+    except (PermissionError, OSError):
+        pass
+
+    parent = str(target.parent) if target.parent != target else None
+    return {
+        "path": str(target),
+        "parent": parent,
+        "folders": folders,
+        "files_here": here,
+        "shortcuts": [
+            {"name": "project", "path": str(ROOT)},
+            {"name": "example data", "path": str(ROOT / "data" / "raw")},
+            {"name": "home", "path": str(Path.home())},
+        ],
+    }
+
+
 @app.get("/api/ontology")
 def ontology() -> dict:
     """The rules the loaded graph is actually running on.

@@ -408,3 +408,26 @@ footer.foot { margin-top: 80px; padding-top: 20px; border-top: 1px solid var(--h
 .gate-example { color: var(--color-ember-rust); margin-top: 6px; text-transform: none; }
 
 nav.tabs { display: flex; gap: 8px; }
+
+/* --- folder picker ------------------------------------------------------- */
+
+.picker {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  padding: 16px 18px;
+  margin-bottom: 14px;
+}
+.picker-head { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.picker-path { color: var(--color-ember-rust); flex: 1; min-width: 0; overflow-wrap: anywhere; text-transform: none; }
+.picker-shortcuts { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.picker-list { max-height: 260px; overflow: auto; border-top: 1px solid var(--hairline-soft); }
+.picker-row {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  background: transparent; border: none; border-bottom: 1px solid var(--hairline-soft);
+  color: var(--dim); padding: 9px 2px; text-align: left; border-radius: 0;
+}
+.picker-row:hover { color: var(--color-pure-white); }
+.picker-name { overflow-wrap: anywhere; }
+.picker-count { color: var(--dimmer); flex: 0 0 auto; text-transform: none; }
+.picker-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 14px; flex-wrap: wrap; }
+.picker-foot .dimmed { margin: 0; font-family: var(--font-body); text-transform: none; font-size: 12.5px; }

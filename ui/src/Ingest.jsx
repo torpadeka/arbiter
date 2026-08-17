@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import FolderPicker from './FolderPicker.jsx'
 
 function post(path, body) {
   return fetch(`/api${path}`, {
@@ -20,6 +21,7 @@ export default function Ingest({ onReady, onChanged, ai }) {
   const [learned, setLearned] = useState(null)
   const [built, setBuilt] = useState(null)
   const [cleared, setCleared] = useState(false)
+  const [picking, setPicking] = useState(false)
   const logRef = useRef(null)
 
   const aiReady = !!ai?.configured
@@ -71,10 +73,16 @@ export default function Ingest({ onReady, onChanged, ai }) {
         <div className="controls" style={{ marginTop: 0, marginBottom: 8 }}>
           <input className="field" value={dataDir} disabled={running}
                  onChange={(e) => setDataDir(e.target.value)} placeholder="folder path" />
+          <button className="pill" disabled={running} onClick={() => setPicking(!picking)}>
+            {picking ? 'hide browser' : 'browse'}
+          </button>
         </div>
+        {picking && (
+          <FolderPicker current={dataDir} onPick={setDataDir} onClose={() => setPicking(false)} />
+        )}
         <p className="hint prose" style={{ marginBottom: 28 }}>
-          A folder on this machine. Reads json, jsonl, csv, markdown and plain text, including
-          subfolders. The example folder holds nine tool exports.
+          Any folder on this machine. Reads json, jsonl, csv, markdown and plain text, including
+          subfolders. The example folder holds nine tool exports of a fictional company.
         </p>
 
         <div className="label">how much should it read</div>
