@@ -34,9 +34,18 @@ Blur destroys detail, so resolution barely matters and small files are better.
 A large video is the one real risk: it competes with a screen recording for CPU.
 If the demo stutters, use the still.
 
-## Treatment already applied
+## Treatment
 
-`filter: blur(50px) saturate(0.85)`, `opacity: 0.5`, and a flat void veil at 72%
-over the top. Cards, log and composer shift to translucent backgrounds so type
-keeps contrast. Nothing needs adjusting unless your source is unusually bright,
-in which case lower `.atmosphere` opacity in `src/styles.css`.
+Set in `src/styles.css`, and it belongs to the footage rather than being fixed.
+Measure before adjusting: screenshot an empty strip of the page and read its
+luma range.
+
+- smooth colour fields take a heavy blur but need darkening, since a bright
+  wash reads as grey rather than void
+- thin bright marks need almost no blur, because blur spreads them over ten
+  times their width and destroys the peak that made them visible
+- saturation stays low either way, so the backdrop never introduces a second
+  accent colour alongside ember rust
+
+The shipped clip is soft colour waves at 26px blur, 0.4 saturation, 0.5
+brightness and 0.5 opacity, behind a 55% void veil.

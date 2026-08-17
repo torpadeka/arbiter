@@ -77,14 +77,23 @@ button { font: inherit; letter-spacing: inherit; text-transform: inherit; cursor
    never loses contrast, and a solid veil rather than a gradient, since the
    system forbids colour transitions.
 
-   Blur is tuned to the footage rather than fixed, and the numbers below were
-   measured rather than guessed. A heavy blur suits smoke or liquid, but it
-   destroys thin high contrast marks: this clip is falling streaks, and at 7px
-   the brightest pixel in an empty region reached only 32 of 255 against a base
-   of 22, a spread no monitor shows. At 2px the same pixel reaches 78. If a
-   backdrop looks like nothing is there, lower the blur before raising opacity:
+   The treatment belongs to the footage, not to the stylesheet, and these
+   numbers were measured rather than guessed. Sample an empty strip of the page
+   and read its luma before deciding anything.
+
+   Smooth colour fields, like the current clip, take a heavy blur happily and
+   need darkening instead: untreated it sat at luma 44 against a canvas of 11,
+   which reads as grey rather than void, so brightness comes down to 0.5 and the
+   veil up to 0.55, landing near 34.
+
+   Thin high contrast marks are the opposite case. An earlier clip of falling
+   streaks vanished at 7px blur, reaching only 32 against a base of 22, because
    blur spreads a thin streak over ten times its width and takes its peak with
-   it. Sample an empty strip and compare min against max before deciding. */
+   it. If a backdrop looks absent, lower the blur before raising opacity.
+
+   Saturation stays low either way: ember rust is meant to be the only colour in
+   the system, so a chromatic backdrop is desaturated rather than allowed to
+   introduce a second accent. */
 
 .atmosphere {
   position: fixed;
@@ -92,8 +101,8 @@ button { font: inherit; letter-spacing: inherit; text-transform: inherit; cursor
   width: 116%;
   height: 116%;
   object-fit: cover;
-  filter: blur(2px) saturate(1) brightness(1.15);
-  opacity: 0.85;
+  filter: blur(26px) saturate(0.4) brightness(0.5);
+  opacity: 0.5;
   z-index: -2;
   pointer-events: none;
 }
@@ -102,7 +111,7 @@ button { font: inherit; letter-spacing: inherit; text-transform: inherit; cursor
   position: fixed;
   inset: 0;
   background: var(--color-void-black);
-  opacity: 0.3;
+  opacity: 0.55;
   z-index: -1;
   pointer-events: none;
 }
