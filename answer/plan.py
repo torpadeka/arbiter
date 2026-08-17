@@ -70,6 +70,14 @@ PREDICATE_HINTS: list[tuple[str, list[str]]] = [
     ("resolved", ["RESOLVED_BY"]),
 ]
 
+# Words that only join a predicate name together and carry no meaning of their
+# own. Short meaningful words like "due" must survive, or an induced
+# HAS_DUE_DATE cannot answer a question asking when something is due.
+PREDICATE_GLUE = {
+    "has", "was", "the", "and", "for", "its", "are", "out", "off", "per", "via", "not",
+    "with", "from", "into", "that", "this", "been", "have", "upon", "about", "been",
+}
+
 ENTITY_LABELS = ["Person", "Project", "Account", "Team", "Decision", "Artifact", "Topic"]
 STOPWORDS = {
     # grammar
@@ -245,14 +253,15 @@ def detect_predicates(question: str, schema: Schema) -> list[str]:
                     out.append(p)
 
     # Hints derived from the vocabulary itself, so an induced ontology is
-    # queryable without anyone writing a phrase table for it. REPORTS_TO
-    # matches "reports to" and "reports"; BUDGET_IS matches "budget".
+    # queryable without anyone writing a phrase table for it. Every meaningful
+    # word counts, not just the first: an induced HAS_STATUS has to answer a
+    # question about "status", where the leading word is only glue.
     for name in schema.predicate_names:
         if name in out:
             continue
         phrase = name.lower().replace("_", " ")
-        head = phrase.split()[0]
-        if phrase in q or (len(head) > 3 and re.search(rf"\b{re.escape(head)}", q)):
+        significant = [t for t in name.lower().split("_") if len(t) >= 3 and t not in PREDICATE_GLUE]
+        if phrase in q or any(re.search(rf"\b{re.escape(t)}", q) for t in significant):
             out.append(name)
     return out
 

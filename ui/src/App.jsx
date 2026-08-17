@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import Pipeline from './Pipeline.jsx'
 
 const DEMO = [
   { q: 'who is ENG-4471 assigned to?', tag: 'provenance' },
@@ -38,11 +39,19 @@ export default function App() {
   const [people, setPeople] = useState([])
   const [busy, setBusy] = useState(false)
   const [showPeople, setShowPeople] = useState(false)
+  const [showPipeline, setShowPipeline] = useState(false)
 
-  useEffect(() => {
+  function refresh() {
     api('/stats').then(setStats).catch(() => {})
     api('/entities').then((d) => setPeople(d.people || [])).catch(() => {})
-  }, [])
+  }
+
+  useEffect(refresh, [])
+
+  // An empty graph means there is nothing to ask about yet, so lead with ingest.
+  useEffect(() => {
+    if (stats && (stats.counts?.Claim || 0) === 0) setShowPipeline(true)
+  }, [stats])
 
   async function ask(q = question, when = asOf) {
     setBusy(true)
@@ -63,14 +72,17 @@ export default function App() {
           <h1>Arbiter</h1>
           <span className="sub">what is currently true, who established it, and when</span>
         </div>
-        {stats && (
-          <div className="stats">
-            {Object.entries(stats.counts).filter(([, v]) => v > 0).map(([k, v]) => (
-              <span key={k} className="stat"><b>{v.toLocaleString()}</b> {k}</span>
-            ))}
-          </div>
-        )}
+        <div className="stats">
+          {stats && Object.entries(stats.counts).filter(([, v]) => v > 0).map(([k, v]) => (
+            <span key={k} className="stat"><b>{v.toLocaleString()}</b> {k}</span>
+          ))}
+          <button className="ghost" onClick={() => setShowPipeline(!showPipeline)}>
+            {showPipeline ? 'hide corpus' : 'ingest a corpus'}
+          </button>
+        </div>
       </header>
+
+      {showPipeline && <div className="pipewrap"><Pipeline onChanged={refresh} /></div>}
 
       <section className="askbar">
         <input

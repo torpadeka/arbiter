@@ -9,11 +9,18 @@ here that is not computed there.
 
 from __future__ import annotations
 
+import io
+import itertools
+import json
+import subprocess
+import threading
 import time
+from contextlib import redirect_stdout
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -29,8 +36,70 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-STATE = Path(__file__).resolve().parent / ".arbiter" / "state.json"
+ROOT = Path(__file__).resolve().parent
+STATE = ROOT / ".arbiter" / "state.json"
 _engine: Engine | None = None
+
+
+# --- background jobs --------------------------------------------------------
+# Induction and ingest take minutes, so they run on a thread and stream their
+# progress. The pipeline already prints a readable narrative of what it is
+# doing, so that output is captured line by line rather than reinvented.
+
+
+@dataclass
+class Job:
+    id: str
+    kind: str
+    status: str = "running"          # running | done | failed
+    log: list[str] = field(default_factory=list)
+    result: dict | None = None
+    error: str = ""
+
+
+_jobs: dict[str, Job] = {}
+_job_ids = itertools.count(1)
+
+
+class _LineWriter(io.TextIOBase):
+    """Appends whole lines to a job's log as the pipeline prints them."""
+
+    def __init__(self, job: Job) -> None:
+        self.job = job
+        self._buffer = ""
+
+    def write(self, text: str) -> int:
+        self._buffer += text
+        while "\n" in self._buffer:
+            line, self._buffer = self._buffer.split("\n", 1)
+            if line.strip():
+                self.job.log.append(line.rstrip())
+        return len(text)
+
+
+def start_job(kind: str, work: Callable[[], dict]) -> Job:
+    job = Job(id=f"{kind}-{next(_job_ids)}", kind=kind)
+    _jobs[job.id] = job
+
+    def run() -> None:
+        try:
+            with redirect_stdout(_LineWriter(job)):
+                job.result = work()
+            job.status = "done"
+        except BaseException as exc:  # a failed demo step must still report
+            job.status = "failed"
+            job.error = f"{type(exc).__name__}: {exc}"[:500]
+            job.log.append(job.error)
+
+    threading.Thread(target=run, daemon=True).start()
+    return job
+
+
+def reset_engine() -> None:
+    """Drop cached state so the next question sees the new graph and ontology."""
+    global _engine
+    _engine = None
+    load_schema.cache_clear()
 
 
 def active_schema() -> Schema:
@@ -59,6 +128,105 @@ class AskRequest(BaseModel):
     as_of: str = ""
     use_model: bool = False
     max_hops: int = 3
+
+
+class InduceRequest(BaseModel):
+    data_dir: str = "data/raw"
+    vocab_docs: int = 40
+
+
+class IngestRequest(BaseModel):
+    tier_b: bool = False
+    source: str = "folder"      # folder | herb
+    products: int | None = None
+
+
+# --- pipeline: reset, induce, ingest ----------------------------------------
+
+
+@app.post("/api/reset")
+def reset() -> dict:
+    """Empty the graph. The engine has no DELETE, so the object store is wiped."""
+    def work() -> dict:
+        print("wiping the object store the graph lives in")
+        done = subprocess.run(
+            ["powershell", "-File", str(ROOT / "scripts" / "reset_graph.ps1")],
+            capture_output=True, text=True, timeout=600,
+        )
+        for line in (done.stdout or "").splitlines():
+            if line.strip():
+                print(line.strip())
+        if done.returncode != 0:
+            raise RuntimeError((done.stderr or "reset failed")[:300])
+        reset_engine()
+        return {"reset": True}
+
+    return {"job": start_job("reset", work).id}
+
+
+@app.post("/api/induce")
+def induce(request: InduceRequest) -> dict:
+    """Derive an ontology from a folder: no schema written by hand."""
+    data_dir = (ROOT / request.data_dir).resolve() if not Path(request.data_dir).is_absolute() else Path(request.data_dir)
+    if not data_dir.is_dir():
+        raise HTTPException(status_code=400, detail=f"{data_dir} is not a directory")
+
+    def work() -> dict:
+        from ingest.induce import run as induce_run
+
+        out = ROOT / "ontology" / "generated.yaml"
+        schema = induce_run(data_dir, out, vocab_docs=request.vocab_docs)
+        STATE.parent.mkdir(parents=True, exist_ok=True)
+        STATE.write_text(json.dumps({"schema": str(out), "data_dir": str(data_dir)}, indent=2), encoding="utf-8")
+        reset_engine()
+        return {
+            "sources": len(schema["sources"]),
+            "predicates": [
+                {"name": name, "domain": spec["domain"], "range": spec["range"],
+                 "cardinality": spec["cardinality"], "temporal": spec["temporal"],
+                 "observed": spec.get("observed_objects_per_subject")}
+                for name, spec in schema["predicates"].items()
+            ],
+            "rules": sum(len(block["rules"]) for block in schema["sources"].values()),
+            "authority": schema["arbitration"]["source_authority"],
+        }
+
+    return {"job": start_job("induce", work).id}
+
+
+@app.post("/api/ingest")
+def ingest(request: IngestRequest) -> dict:
+    """Parse, resolve, arbitrate and write the graph."""
+    state = json.loads(STATE.read_text(encoding="utf-8")) if STATE.exists() else {}
+
+    def work() -> dict:
+        from ingest.load import run as load_run
+
+        graph = load_run(
+            tier_b=request.tier_b,
+            source="herb" if request.source == "herb" else "seed",
+            products=request.products,
+            schema_path=state.get("schema") if request.source == "folder" else None,
+            data_dir=state.get("data_dir") if request.source == "folder" else None,
+        )
+        reset_engine()
+        return {
+            "nodes": graph.node_count,
+            "edges": graph.edge_count,
+            "by_label": {k: len(v) for k, v in sorted(graph.nodes.items())},
+            "by_edge": {k: len(v) for k, v in sorted(graph.edges.items())},
+        }
+
+    return {"job": start_job("ingest", work).id}
+
+
+@app.get("/api/job/{job_id}")
+def job_status(job_id: str) -> dict:
+    job = _jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="no such job")
+    return {"id": job.id, "kind": job.kind, "status": job.status,
+            "log": job.log, "result": job.result, "error": job.error}
 
 
 @app.get("/api/health")
