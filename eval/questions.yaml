@@ -1,0 +1,197 @@
+# Evaluation set for the seed corpus.
+#
+# Every expectation is grounded in a fact planted in data/seed/build_seed.py.
+# Four categories, because they fail in different ways:
+#   lookup        — one hop, one source. A vector index handles these too.
+#   alias         — only resolvable because entity resolution merged surfaces.
+#   conflict      — two sources disagree; the arbiter must pick the current one.
+#   unanswerable  — the corpus does not contain the answer. Abstention required.
+#
+# `contains` is case-insensitive substring matching against the answer text.
+# `gate` asserts *which* abstention gate fired, so a question that abstains for
+# the wrong reason counts as a failure rather than a lucky pass.
+
+- id: lookup-01
+  category: lookup
+  question: "who is ENG-4471 assigned to?"
+  expect: answered
+  contains: ["Sam Ratnaparkhi"]
+
+- id: lookup-02
+  category: lookup
+  question: "what is the status of ENG-4482?"
+  expect: answered
+  contains: ["done"]
+
+- id: lookup-03
+  category: lookup
+  question: "who is ENG-4500 assigned to?"
+  expect: answered
+  contains: ["Priya Nandakumar"]
+
+- id: lookup-04
+  category: lookup
+  question: "when is ENG-4482 due?"
+  expect: answered
+  contains: ["2026-05-19"]
+
+- id: lookup-05
+  category: lookup
+  question: "what is the status of ATL-12?"
+  expect: answered
+  contains: ["in progress"]
+
+- id: lookup-06
+  category: lookup
+  question: "who is ATL-12 assigned to?"
+  expect: answered
+  contains: ["Sam Ratnaparkhi"]
+
+- id: lookup-07
+  category: lookup
+  question: "who owns Acme Corp?"
+  expect: answered
+  contains: ["Wei Chen"]
+
+- id: lookup-08
+  category: lookup
+  question: "who is BCN-4 assigned to?"
+  expect: answered
+  contains: ["Wei Chen"]
+
+- id: lookup-09
+  category: lookup
+  question: "which project is Acme Corp a customer of?"
+  expect: answered
+  contains: ["atlas migration"]
+
+- id: lookup-10
+  category: lookup
+  question: "who reviewed pull request 812?"
+  expect: answered
+  contains: ["Wei Chen"]
+
+- id: alias-01
+  category: alias
+  question: "what does @soham work on?"
+  expect: answered
+  contains: ["atlas migration"]
+  note: "@soham is only linked to Sam by entity resolution; no document says both."
+
+- id: alias-02
+  category: alias
+  question: "what does soham-r work on?"
+  expect: answered
+  contains: ["atlas migration"]
+  note: "GitHub login, surname abbreviated to an initial."
+
+- id: alias-03
+  category: alias
+  question: "what does S. Ratnaparkhi work on?"
+  expect: answered
+  contains: ["atlas migration"]
+
+- id: alias-04
+  category: alias
+  question: "what does @wei work on?"
+  expect: answered
+  contains: ["beacon"]
+
+- id: alias-05
+  category: alias
+  question: "what is sam.ratnaparkhi@northwind.com assigned to?"
+  expect: answered
+  contains: ["atlas"]
+
+- id: conflict-01
+  category: conflict
+  question: "when does Atlas Migration launch?"
+  expect: answered
+  contains: ["2026-07-12"]
+  note: "Linear moved the milestone from May 3 to Jul 12; the later claim wins."
+
+- id: conflict-02
+  category: conflict
+  question: "when does Atlas Migration launch?"
+  as_of: "2026-03-01"
+  expect: answered
+  contains: ["2026-05-03"]
+  note: "Same question as of March: the May 3 milestone was current then."
+
+- id: conflict-03
+  category: conflict
+  question: "when is Atlas Migration scheduled?"
+  expect: answered
+  contains: ["2026-07-12"]
+
+- id: tierb-01
+  category: alias
+  question: "who does @soham report to?"
+  expect: answered
+  contains: ["Dana Okafor"]
+  requires_tier_b: true
+  note: "Reporting line exists only in email prose; the asker uses a Slack handle."
+
+- id: tierb-02
+  category: conflict
+  question: "who owns Atlas Migration?"
+  expect: answered
+  contains: ["Sam Ratnaparkhi"]
+  requires_tier_b: true
+  note: "Slack (Mar 2, Priya) vs meeting transcript (Apr 11, Sam). Later + higher authority wins."
+
+- id: tierb-03
+  category: conflict
+  question: "who owns Atlas Migration?"
+  as_of: "2026-03-15"
+  expect: answered
+  contains: ["Priya Nair"]
+  requires_tier_b: true
+  note: "Same question in mid-March: only Priya's claim had been asserted."
+
+- id: tierb-04
+  category: lookup
+  question: "what blocks Atlas Migration?"
+  expect: answered
+  contains: ["beacon"]
+  requires_tier_b: true
+
+- id: unans-01
+  category: unanswerable
+  question: "what is the budget for Atlas Migration?"
+  expect: abstained
+  gate: coverage
+  note: "The corpus never mentions a budget for anything."
+
+- id: unans-02
+  category: unanswerable
+  question: "who owns Project Zephyr?"
+  expect: abstained
+  gate: entity
+  note: "No such project exists."
+
+- id: unans-03
+  category: unanswerable
+  question: "what is the priority of ENG-4471?"
+  expect: abstained
+  gate: coverage
+  note: "The ticket exists; priority was never set."
+
+- id: unans-04
+  category: unanswerable
+  question: "who is the CEO of Northwind?"
+  expect: abstained
+  gate: entity
+
+- id: unans-05
+  category: unanswerable
+  question: "what is the budget for Vertex Labs?"
+  expect: abstained
+  gate: coverage
+
+- id: unans-06
+  category: unanswerable
+  question: "who does Wei Chen report to?"
+  expect: abstained
+  gate: coverage
+  note: "Sam's reporting line is stated in email; Wei's never is."

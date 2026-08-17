@@ -1,0 +1,301 @@
+# Arbiter canonical ontology.
+#
+# Hand-authored once; everything IN the graph is derived. The vocabulary is
+# fixed on purpose: the engine requires exactly one relationship type per
+# pattern, deterministic traversal needs a stable type set, and abstention is
+# only meaningful when "no claim covers this predicate" is a decidable
+# question. Extraction is constrained to the `predicates` enum below;
+# anything unmapped lands in predicate_raw and is clustered for promotion.
+
+version: 1
+
+# --- node types -------------------------------------------------------------
+# `key` is the human-readable identity; the engine id is blake2b(key)[:8] >> 1.
+node_types:
+  Person:    {key: "person:{canonical}",  desc: "A human, after entity resolution"}
+  Alias:     {key: "alias:{surface}",     desc: "One observed surface form of a Person"}
+  Team:      {key: "team:{slug}",         desc: "A group of people"}
+  Project:   {key: "project:{slug}",      desc: "A named body of work"}
+  Account:   {key: "account:{slug}",      desc: "A customer or prospect org"}
+  Artifact:  {key: "artifact:{tool}:{doc_id}", desc: "One source document"}
+  Decision:  {key: "decision:{slug}",     desc: "A resolved choice with an owner"}
+  Topic:     {key: "topic:{slug}",        desc: "A subject discussed across tools"}
+  Claim:     {key: "claim:{hash}",        desc: "One extracted statement, with provenance"}
+  Group:     {key: "group:{slug}",        desc: "ACL group; visibility unit"}
+
+artifact_kinds: [message, email, ticket, doc, pr, meeting, deal, transcript]
+
+# --- predicate vocabulary ---------------------------------------------------
+# temporal: true  -> claims can be superseded by later, better-sourced ones
+# cardinality: one  -> functional; one current value per subject, so competing
+#                      objects are a genuine contradiction to arbitrate
+# cardinality: many -> a subject can hold many values at once; different
+#                      objects coexist and never supersede each other
+#
+# Getting this wrong manufactures conflicts: a person assigned to two tickets,
+# or owning two accounts, is not contradicting themselves. Functional facts are
+# written subject-first from the thing that has one answer (a ticket has one
+# assignee; a person has many tickets).
+predicates:
+  # remap: same relation, different word, depending on what it is said about.
+  # "Atlas is assigned to Sam" (a project) means ownership; "ENG-4471 is
+  # assigned to Sam" (a ticket) means assignment. Without this, the two phrasings
+  # land on different predicates and two people claiming one project never
+  # compete, so the contradiction is silently lost.
+  ASSIGNED_TO:   {domain: [Artifact, Project, Decision], range: [Person], temporal: true,  cardinality: one, remap: {Project: OWNED_BY, Account: OWNED_BY}}
+  OWNED_BY:      {domain: [Project, Account, Artifact], range: [Person, Team], temporal: true,  cardinality: one, inverse: OWNS}
+  REPORTS_TO:    {domain: [Person], range: [Person], temporal: true,  cardinality: one}
+  STATUS_IS:     {domain: [Project, Artifact, Decision], range: [Topic], temporal: true,  cardinality: one}
+  DUE_ON:        {domain: [Project, Artifact], range: [Topic], temporal: true,  cardinality: one}
+  PRIORITY_IS:   {domain: [Project, Artifact], range: [Topic], temporal: true,  cardinality: one}
+  BUDGET_IS:     {domain: [Project, Account], range: [Topic], temporal: true,  cardinality: one}
+  SCHEDULED_FOR: {domain: [Artifact, Project], range: [Topic], temporal: true,  cardinality: one}
+  RESOLVED_BY:   {domain: [Artifact], range: [Person], temporal: true,  cardinality: one}
+  # Free text says "I'm taking the Atlas migration" (person-first, multi-valued).
+  # The arbitrable form is thing-first and functional, so OWNS is rewritten to
+  # OWNED_BY at alignment time — otherwise two people claiming one project never
+  # meet in the same competing set.
+  OWNS:          {domain: [Person, Team], range: [Project, Account, Topic], temporal: true,  cardinality: many, inverse: OWNED_BY}
+  MEMBER_OF:     {domain: [Person], range: [Team, Project], temporal: true,  cardinality: many}
+  WORKS_ON:      {domain: [Person], range: [Project, Topic], temporal: true,  cardinality: many}
+  BLOCKS:        {domain: [Project, Artifact], range: [Project, Artifact], temporal: true,  cardinality: many}
+  DEPENDS_ON:    {domain: [Project, Artifact], range: [Project, Artifact], temporal: true,  cardinality: many}
+  CUSTOMER_OF:   {domain: [Account], range: [Project, Team], temporal: true,  cardinality: many}
+  ESCALATED_TO:  {domain: [Artifact, Account], range: [Person, Team], temporal: true,  cardinality: many}
+  RISK_OF:       {domain: [Project, Account], range: [Topic], temporal: true,  cardinality: many}
+  DECIDED:       {domain: [Person, Team], range: [Decision], temporal: false, cardinality: many}
+  REVIEWED_BY:   {domain: [Artifact], range: [Person], temporal: false, cardinality: many}
+  AUTHORED:      {domain: [Person], range: [Artifact], temporal: false, cardinality: many}
+  MENTIONS:      {domain: [Artifact], range: [Person, Project, Account, Topic], temporal: false, cardinality: many}
+  DISCUSSED_IN:  {domain: [Project, Topic, Account], range: [Artifact], temporal: false, cardinality: many}
+  REFERENCES:    {domain: [Artifact], range: [Artifact], temporal: false, cardinality: many}
+
+# Structural edge types written by the loader, never extracted.
+structural_edges:
+  - ALIAS_OF      # (:Alias)   -> (:Person)
+  - ABOUT         # (:Claim)   -> subject entity
+  - OBJECT        # (:Claim)   -> object entity
+  - SOURCED_FROM  # (:Claim)   -> (:Artifact)
+  - ASSERTED_BY   # (:Claim)   -> (:Person)
+  - SUPERSEDES    # (:Claim)   -> (:Claim)
+  - CONTRADICTS   # (:Claim)   -> (:Claim)
+  - VISIBLE_TO    # (:Artifact|:Claim) -> (:Group)
+
+# --- conflict arbitration ---------------------------------------------------
+arbitration:
+  weights: {authority: 0.35, recency: 0.30, specificity: 0.15, corroboration: 0.15, hedging: -0.05}
+  contested_margin: 0.05   # score gap below this -> :CONTRADICTS, flagged contested
+  # How much a source is trusted to state current fact. Structured fields beat chat.
+  source_authority:
+    jira: 1.00
+    linear: 1.00
+    github: 0.90
+    hubspot: 0.90
+    confluence: 0.80
+    drive: 0.75
+    fireflies: 0.70
+    gmail: 0.60
+    slack: 0.50
+    # HERB sources. The org chart is structured HR data, so it outranks
+    # everything; chat and meeting chatter rank lowest, as in the tool corpus.
+    herb_org: 1.00
+    herb_pr: 0.90
+    herb_doc: 0.80
+    herb_url: 0.70
+    herb_transcript: 0.65
+    herb_slack: 0.50
+    herb_chat: 0.45
+  hedging_markers: ["i think", "maybe", "probably", "not sure", "iirc", "afaik", "might", "tentatively"]
+
+# --- retrieval / abstention -------------------------------------------------
+retrieval:
+  max_hops: 3
+  path_count: 5
+  sufficiency_threshold: 0.35   # top claim score below this -> abstain
+
+# --- per-source field maps --------------------------------------------------
+# Deterministic tier A. Dotted paths into each tool's native record.
+# `rules` emit claims without an LLM; free text goes to tier B extraction.
+sources:
+  slack:
+    artifact_kind: message
+    doc_id: ts
+    title: channel
+    body: text
+    created_at: ts_iso
+    author: user
+    author_email: user_email
+    acl: [channel]
+    rules:
+      - {subject: user, subject_type: Person, predicate: AUTHORED, object: __self__, object_type: Artifact}
+
+  gmail:
+    artifact_kind: email
+    doc_id: message_id
+    title: subject
+    body: body
+    created_at: date
+    author: from
+    acl: []
+    participants: [to]
+    rules:
+      - {subject: from, subject_type: Person, predicate: AUTHORED, object: __self__, object_type: Artifact}
+
+  jira:
+    artifact_kind: ticket
+    doc_id: key
+    title: fields.summary
+    body: fields.description
+    created_at: fields.created
+    updated_at: fields.updated
+    author: fields.reporter.displayName
+    acl: [fields.project.key]
+    rules:
+      # Ticket-level facts attach to the ticket, never to the project: a
+      # ticket assignee is not the project owner, and rolling one up to the
+      # other manufactures conflicts that do not exist.
+      - {subject: __self__, subject_type: Artifact, predicate: ASSIGNED_TO, object: fields.assignee.displayName, object_type: Person, asserted_at: fields.updated}
+      - {subject: __self__, subject_type: Artifact, predicate: STATUS_IS, object: fields.status.name, object_type: Topic, asserted_at: fields.updated}
+      - {subject: __self__, subject_type: Artifact, predicate: DUE_ON, object: fields.duedate, object_type: Topic, asserted_at: fields.updated}
+      # Project-level connectivity, which the assignment does support.
+      - {subject: fields.assignee.displayName, subject_type: Person, predicate: WORKS_ON, object: fields.project.name, object_type: Project, asserted_at: fields.updated}
+      - {subject: fields.project.name, subject_type: Project, predicate: DISCUSSED_IN, object: __self__, object_type: Artifact}
+
+  linear:
+    artifact_kind: ticket
+    doc_id: identifier
+    title: title
+    body: description
+    created_at: createdAt
+    updated_at: updatedAt
+    author: creator.name
+    acl: [team.key]
+    rules:
+      - {subject: __self__, subject_type: Artifact, predicate: ASSIGNED_TO, object: assignee.name, object_type: Person, asserted_at: updatedAt}
+      - {subject: __self__, subject_type: Artifact, predicate: STATUS_IS, object: state.name, object_type: Topic, asserted_at: updatedAt}
+      - {subject: __self__, subject_type: Artifact, predicate: DUE_ON, object: dueDate, object_type: Topic, asserted_at: updatedAt}
+      - {subject: assignee.name, subject_type: Person, predicate: WORKS_ON, object: project.name, object_type: Project, asserted_at: updatedAt}
+      # Project-level milestone: the functional fact the launch-date conflict
+      # arbitrates against free-text claims from Confluence and Slack.
+      - {subject: project.name, subject_type: Project, predicate: SCHEDULED_FOR, object: dueDate, object_type: Topic, asserted_at: updatedAt}
+      - {subject: project.name, subject_type: Project, predicate: DISCUSSED_IN, object: __self__, object_type: Artifact}
+
+  github:
+    artifact_kind: pr
+    doc_id: number
+    title: title
+    body: body
+    created_at: created_at
+    updated_at: merged_at
+    author: user.login
+    acl: [repo]
+    rules:
+      - {subject: user.login, subject_type: Person, predicate: AUTHORED, object: __self__, object_type: Artifact}
+      - {subject: __self__, subject_type: Artifact, predicate: REVIEWED_BY, object: reviewer.login, object_type: Person}
+
+  confluence:
+    artifact_kind: doc
+    doc_id: id
+    title: title
+    body: body
+    created_at: created
+    updated_at: updated
+    author: author
+    acl: [space]
+    rules:
+      - {subject: author, subject_type: Person, predicate: AUTHORED, object: __self__, object_type: Artifact}
+
+  drive:
+    artifact_kind: doc
+    doc_id: file_id
+    title: name
+    body: content
+    created_at: createdTime
+    updated_at: modifiedTime
+    author: owner
+    acl: [drive_id]
+    rules:
+      - {subject: owner, subject_type: Person, predicate: AUTHORED, object: __self__, object_type: Artifact}
+
+  hubspot:
+    artifact_kind: deal
+    doc_id: deal_id
+    title: dealname
+    body: notes
+    created_at: createdate
+    updated_at: hs_lastmodifieddate
+    author: owner
+    acl: [pipeline]
+    rules:
+      - {subject: owner, subject_type: Person, predicate: OWNS, object: company, object_type: Account, asserted_at: hs_lastmodifieddate}
+      - {subject: company, subject_type: Account, predicate: CUSTOMER_OF, object: product, object_type: Project, asserted_at: hs_lastmodifieddate}
+
+  # --- Salesforce HERB (huggingface.co/datasets/Salesforce/HERB) ------------
+  # One JSON per product rather than one record per line, so ingest/herb.py
+  # explodes each product into records; the field maps below are ordinary
+  # dotted paths like every other source.
+  herb_slack:
+    artifact_kind: message
+    doc_id: id
+    title: Channel.name
+    body: Message.User.text
+    author: Message.User.userId
+    created_at: Message.User.timestamp
+    acl: [Channel.name]
+    rules:
+      - {subject: Message.User.userId, subject_type: Person, predicate: AUTHORED, object: __self__, object_type: Artifact}
+
+  herb_doc:
+    artifact_kind: doc
+    doc_id: id
+    title: type
+    body: content
+    author: author
+    created_at: date
+    rules:
+      - {subject: author, subject_type: Person, predicate: AUTHORED, object: __self__, object_type: Artifact}
+
+  herb_transcript:
+    artifact_kind: transcript
+    doc_id: id
+    title: document_type
+    body: transcript
+    created_at: date
+    participants: [participants]
+    rules: []
+
+  herb_chat:
+    artifact_kind: message
+    doc_id: id
+    body: text
+    rules: []
+
+  herb_url:
+    artifact_kind: doc
+    doc_id: id
+    title: link
+    body: description
+    rules: []
+
+  herb_pr:
+    artifact_kind: pr
+    doc_id: id
+    title: title
+    body: summary
+    author: user.login
+    created_at: created_at
+    rules:
+      - {subject: user.login, subject_type: Person, predicate: AUTHORED, object: __self__, object_type: Artifact}
+      - {subject: __self__, subject_type: Artifact, predicate: STATUS_IS, object: state, object_type: Topic}
+
+  fireflies:
+    artifact_kind: transcript
+    doc_id: meeting_id
+    title: title
+    body: transcript
+    created_at: date
+    author: organizer
+    acl: []
+    participants: [attendees]
+    rules:
+      - {subject: organizer, subject_type: Person, predicate: AUTHORED, object: __self__, object_type: Artifact}

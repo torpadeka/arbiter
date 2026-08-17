@@ -1,0 +1,44 @@
+# HydraDB local node data (object store, cache, auth token)
+.hydradb-data/
+# MinIO data if it was ever bind-mounted here (the stack uses a docker volume)
+.minio-data/
+# CLI subgraph exports
+out.html
+*.subgraph.html
+
+# Corpus + derived artifacts — never commit the dataset
+data/raw/
+data/herb/
+data/scale/
+data/interim/
+data/cache/
+*.jsonl.gz
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+
+# Env + secrets
+.env
+.env.local
+
+# Eval outputs
+eval/results/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Hackathon reference material, not part of the project
+*.pdf
