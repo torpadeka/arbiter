@@ -143,7 +143,7 @@ class EntityIndex:
     def __init__(self, client: HydraClient) -> None:
         self.entities: list[Entity] = []
         for label in ENTITY_LABELS:
-            rows = client.query(f"MATCH (n:{label}) RETURN n.id AS id, n.key AS key, n.name AS name")
+            rows = client.scan_label(label)
             for r in rows:
                 if r.get("key"):
                     self.entities.append(Entity(id=r["id"], key=r["key"], name=r.get("name") or r["key"], label=label))
@@ -152,7 +152,7 @@ class EntityIndex:
         # about "@soham" finds Sam without the asker knowing they are the same.
         self.alias_targets: dict[str, Entity] = {}
         by_id = {e.id: e for e in self.entities}
-        for row in client.query("MATCH (a:Alias)-[:ALIAS_OF]->(p) RETURN a.name AS alias, p.id AS pid"):
+        for row in client.scan("(a:Alias)-[:ALIAS_OF]->(p)", "a.key AS key, a.name AS alias, p.id AS pid", "a.key"):
             target = by_id.get(row.get("pid"))
             if target and row.get("alias"):
                 self.alias_targets[norm(row["alias"])] = target
@@ -161,9 +161,9 @@ class EntityIndex:
         # products — every product has a "Market Research Report" — so a title
         # alone is ambiguous, and the question usually names the product too.
         self.artifact_project: dict[str, str] = {}
-        for row in client.query("MATCH (p:Project)-[:DISCUSSED_IN]->(a) RETURN p.key AS project, a.key AS artifact"):
-            if row.get("artifact") and row.get("project"):
-                self.artifact_project[row["artifact"]] = row["project"]
+        for row in client.scan("(p:Project)-[:DISCUSSED_IN]->(a)", "a.key AS key, p.key AS project", "a.key"):
+            if row.get("key") and row.get("project"):
+                self.artifact_project[row["key"]] = row["project"]
 
     def match(self, question: str, limit: int = 4) -> tuple[list[Entity], list[str]]:
         """Entities mentioned in the question, best first, plus unmatched terms."""

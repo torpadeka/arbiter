@@ -247,6 +247,38 @@ class HydraClient:
             out.extend({**r, "rel": rel} for r in rows)
         return out
 
+    def scan(self, match: str, fields: str, key_expr: str, page: int = 1000, params: dict | None = None) -> list[dict]:
+        """Read every matching row, paging by key.
+
+        A single MATCH is capped server-side at 1024 rows, and the `next_cursor`
+        it returns is bound to that exact request, so replaying it fails with
+        "result cursor does not belong to this query request". Keyset pagination
+        avoids the cursor entirely and uses only the supported subset: order by
+        a key and ask for everything after the last one seen.
+
+        Silent truncation is the failure this prevents. An entity index missing
+        a quarter of its people looks like a working system that just cannot
+        find things.
+        """
+        out: list[dict] = []
+        last = ""
+        while True:
+            rows = self.query(
+                f"MATCH {match} WHERE {key_expr} > $__last RETURN {fields} ORDER BY key LIMIT {int(page)}",
+                {**(params or {}), "__last": last},
+            )
+            if not rows:
+                break
+            out.extend(rows)
+            nxt = rows[-1].get("key")
+            if not nxt or nxt == last or len(rows) < page:
+                break
+            last = nxt
+        return out
+
+    def scan_label(self, label: str, fields: str = "n.id AS id, n.key AS key, n.name AS name") -> list[dict]:
+        return self.scan(f"(n:{label})", fields, "n.key")
+
     def count(self, label: str) -> int:
         """Count nodes carrying a label. `count(*)` is supported; `count(n)` is not."""
         rows = self.query(f"MATCH (n:{label}) RETURN count(*) AS c")

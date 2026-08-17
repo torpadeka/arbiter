@@ -214,6 +214,26 @@ table.preds .obs { font-family: var(--font-mono); font-size: var(--text-caption)
 
 .built { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
 
+/* The prepared demonstration sits outside the numbered flow: a different zone,
+   marked by the single ember hairline rather than by a fill. */
+.demo {
+  margin-top: 24px;
+  padding: 24px 32px;
+  border: 1px solid var(--hairline-soft);
+  border-left: 1px solid var(--color-ember-rust);
+  border-radius: var(--radius-card);
+  display: flex;
+  gap: 32px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.demo-copy { flex: 1; min-width: 280px; }
+.demo-copy .label { color: var(--color-ember-rust); margin-bottom: 8px; }
+.pill.ember { border-color: var(--color-ember-rust); color: var(--color-ember-rust); }
+.pill.ember:hover { border-color: var(--color-pure-white); color: var(--color-pure-white); }
+.pill.ember:disabled { border-color: var(--hairline); color: var(--dimmer); }
+
 /* --- chat --------------------------------------------------------------- */
 
 .chat { display: flex; flex-direction: column; gap: 24px; margin-top: 32px; }

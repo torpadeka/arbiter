@@ -144,24 +144,63 @@ class IngestRequest(BaseModel):
 # --- pipeline: reset, induce, ingest ----------------------------------------
 
 
+def wipe_graph() -> None:
+    """Empty the graph. The engine has no DELETE, so the object store is wiped."""
+    print("wiping the object store the graph lives in")
+    done = subprocess.run(
+        ["powershell", "-File", str(ROOT / "scripts" / "reset_graph.ps1")],
+        capture_output=True, text=True, timeout=600,
+    )
+    for line in (done.stdout or "").splitlines():
+        if line.strip():
+            print(line.strip())
+    if done.returncode != 0:
+        raise RuntimeError((done.stderr or "reset failed")[:300])
+    reset_engine()
+
+
+def graph_summary(graph) -> dict:
+    return {
+        "nodes": graph.node_count,
+        "edges": graph.edge_count,
+        "by_label": {k: len(v) for k, v in sorted(graph.nodes.items())},
+        "by_edge": {k: len(v) for k, v in sorted(graph.edges.items())},
+    }
+
+
 @app.post("/api/reset")
 def reset() -> dict:
-    """Empty the graph. The engine has no DELETE, so the object store is wiped."""
     def work() -> dict:
-        print("wiping the object store the graph lives in")
-        done = subprocess.run(
-            ["powershell", "-File", str(ROOT / "scripts" / "reset_graph.ps1")],
-            capture_output=True, text=True, timeout=600,
-        )
-        for line in (done.stdout or "").splitlines():
-            if line.strip():
-                print(line.strip())
-        if done.returncode != 0:
-            raise RuntimeError((done.stderr or "reset failed")[:300])
-        reset_engine()
+        wipe_graph()
         return {"reset": True}
 
     return {"job": start_job("reset", work).id}
+
+
+@app.post("/api/demo/herb")
+def demo_herb(request: IngestRequest) -> dict:
+    """One click: wipe, download the dataset if needed, build with the adapter.
+
+    Separate from the folder flow on purpose. This path uses a purpose-written
+    reader rather than an induced ontology, so it is a prepared demonstration
+    rather than a demonstration of adapting to unseen data.
+    """
+    def work() -> dict:
+        from ingest.herb import fetch, product_files
+        from ingest.load import run as load_run
+
+        wipe_graph()
+        want = request.products or 5
+        have = len(product_files())
+        if have < want:
+            print(f"fetching HERB from huggingface: {have} of {want} products present")
+            fetch(want)
+            print(f"fetched, {len(product_files())} product files available")
+        graph = load_run(tier_b=request.tier_b, source="herb", products=want)
+        reset_engine()
+        return graph_summary(graph)
+
+    return {"job": start_job("ingest", work).id}
 
 
 @app.post("/api/induce")
@@ -199,37 +238,20 @@ def ingest(request: IngestRequest) -> dict:
     """Parse, resolve, arbitrate and write the graph."""
     state = json.loads(STATE.read_text(encoding="utf-8")) if STATE.exists() else {}
 
+    if not state.get("schema"):
+        raise HTTPException(status_code=400, detail="no ontology yet: induce one from the folder first")
+
     def work() -> dict:
         from ingest.load import run as load_run
 
-        if request.source == "herb":
-            # Download on demand so a clean clone can run this without a
-            # separate CLI step. Already-present files are left alone.
-            from ingest.herb import fetch, product_files
-
-            have = len(product_files())
-            want = request.products or 5
-            if have < want:
-                print(f"fetching HERB from huggingface: {have} of {want} products present")
-                fetch(want)
-                print(f"fetched, {len(product_files())} product files available")
-        elif not state.get("schema"):
-            raise RuntimeError("no ontology yet: run step 02 to induce one from the folder first")
-
         graph = load_run(
             tier_b=request.tier_b,
-            source="herb" if request.source == "herb" else "seed",
-            products=request.products,
-            schema_path=state.get("schema") if request.source == "folder" else None,
-            data_dir=state.get("data_dir") if request.source == "folder" else None,
+            source="seed",
+            schema_path=state.get("schema"),
+            data_dir=state.get("data_dir"),
         )
         reset_engine()
-        return {
-            "nodes": graph.node_count,
-            "edges": graph.edge_count,
-            "by_label": {k: len(v) for k, v in sorted(graph.nodes.items())},
-            "by_edge": {k: len(v) for k, v in sorted(graph.edges.items())},
-        }
+        return graph_summary(graph)
 
     return {"job": start_job("ingest", work).id}
 
@@ -266,10 +288,11 @@ def stats() -> dict:
 
 @app.get("/api/entities")
 def entities(limit: int = 40) -> dict:
-    rows = HydraClient().query(
-        "MATCH (p:Person) RETURN p.key AS key, p.name AS name, p.email AS email, "
-        "p.alias_count AS aliases, p.mention_count AS mentions, p.tools AS tools, "
-        "p.merge_evidence AS evidence"
+    rows = HydraClient().scan(
+        "(p:Person)",
+        "p.key AS key, p.name AS name, p.email AS email, p.alias_count AS aliases, "
+        "p.mention_count AS mentions, p.tools AS tools, p.merge_evidence AS evidence",
+        "p.key",
     )
 
     def as_int(value: Any) -> int:
