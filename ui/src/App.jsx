@@ -4,45 +4,36 @@ import Chat from './Chat.jsx'
 import HowItWorks from './HowItWorks.jsx'
 import Mark from './Mark.jsx'
 
-/** Optional ambient backdrop.
+/** The ambient backdrop, part of the design rather than an optional extra.
  *
- *  Drop a file into ui/public and it is picked up automatically:
- *    atmosphere.mp4   preferred, looped and muted
- *    atmosphere.jpg   fallback still
- *  With neither present the UI stays flat void, which is also correct.
+ *  `ui/public/atmosphere.mp4` ships with the repo, so a fresh clone looks the way
+ *  it is meant to. Replace that file to change the atmosphere; if it is missing
+ *  the page falls back to flat void, which is also a valid reading of the style.
+ *
+ *  Blur is deliberately light in styles.css: this footage is thin bright streaks,
+ *  and a heavy blur erases them entirely.
  */
-function Atmosphere({ onFound }) {
-  const [kind, setKind] = useState(null)
+const ATMOSPHERE = '/atmosphere.mp4'
 
-  useEffect(() => {
-    let cancelled = false
-    async function probe(path) {
-      try {
-        const r = await fetch(path, { method: 'HEAD' })
-        return r.ok && !(r.headers.get('content-type') || '').includes('text/html')
-      } catch { return false }
-    }
-    ;(async () => {
-      for (const [path, k] of [['/atmosphere.mp4', 'video'], ['/atmosphere.jpg', 'image'], ['/atmosphere.png', 'image']]) {
-        if (cancelled) return
-        if (await probe(path)) {
-          setKind({ k, path })
-          onFound?.()
-          return
-        }
-      }
-    })()
-    return () => { cancelled = true }
-  }, [])
+function Atmosphere({ onReady }) {
+  const [failed, setFailed] = useState(false)
 
-  if (!kind) return null
+  useEffect(() => { if (!failed) onReady?.() }, [failed])
+
+  if (failed) return null
   return (
     <>
-      {kind.k === 'video' ? (
-        <video className="atmosphere" src={kind.path} autoPlay muted loop playsInline />
-      ) : (
-        <img className="atmosphere" src={kind.path} alt="" />
-      )}
+      <video
+        className="atmosphere"
+        src={ATMOSPHERE}
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="auto"
+        aria-hidden="true"
+        onError={() => setFailed(true)}
+      />
       <div className="veil" />
     </>
   )
@@ -75,7 +66,7 @@ export default function App() {
 
   return (
     <div className={atmosphere ? 'has-atmosphere' : ''}>
-      <Atmosphere onFound={() => setAtmosphere(true)} />
+      <Atmosphere onReady={() => setAtmosphere(true)} />
 
       <div className="newsbar mono">
         arbiter<span className="sep">•</span>answers from your company's own files

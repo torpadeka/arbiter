@@ -123,10 +123,11 @@ export default function Ingest({ onReady, onChanged, ai }) {
           </button>
           <button className={`choice ${!deriveOntology ? 'on' : ''}`} disabled={running}
                   onClick={() => setDeriveOntology(false)}>
-            <span className="choice-title">use the one shipped here</span>
+            <span className="choice-title">use pre-determined standard vocabulary</span>
             <span className="choice-body prose">
-              A curated vocabulary for the nine common business tools, tuned so disagreements between
-              them are caught. Skips step 02.
+              A standard set of business relationships that ships with Arbiter: assignment, ownership,
+              status, due dates, reporting lines and the rest. Already tuned so disagreements between
+              tools are caught. Skips step 02.
             </span>
           </button>
         </div>
@@ -138,10 +139,10 @@ export default function Ingest({ onReady, onChanged, ai }) {
           </Step>
 
           <Step n="02" done={!!learned || !deriveOntology}
-                title={deriveOntology ? 'work out what is in the files' : 'not needed, using the shipped vocabulary'}
+                title={deriveOntology ? 'work out what is in the files' : 'not needed with the standard vocabulary'}
                 hint={deriveOntology
                   ? 'Looks at a sample of your records and works out which fields hold ids, authors and dates, what kinds of things exist, and how they relate to each other. You can review the result before anything is stored.'
-                  : 'Skipped. The shipped vocabulary already describes these tools.'}>
+                  : 'Skipped. The standard vocabulary already covers these relationships.'}>
             {deriveOntology && (
               <button className="pill" disabled={running}
                       onClick={() => launch('/induce', { data_dir: dataDir }, 'induce')}>read the files</button>

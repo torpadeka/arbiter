@@ -49,11 +49,11 @@ Thumbs.db
 # Hackathon reference material, not part of the project
 *.pdf
 
-# Ambient backdrop assets, kept local
-ui/public/atmosphere.*
 
-# Source video files, kept local
+# Source video files stay local: the 4K original is 4.3 MB and only the
+# transcoded 234 KB backdrop is needed, so that one is tracked deliberately.
 *.mp4
+!ui/public/atmosphere.mp4
 
 # Recorded footage, kept local
 recordings/
