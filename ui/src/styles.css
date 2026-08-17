@@ -72,6 +72,38 @@ button { font: inherit; letter-spacing: inherit; text-transform: inherit; cursor
   letter-spacing: -0.22px;
 }
 
+/* --- atmosphere ----------------------------------------------------------
+   Ambient, not illustrative. Heavily blurred and pushed far back, with a flat
+   void veil over it so type never loses contrast. A solid veil rather than a
+   gradient, since the system forbids colour transitions. */
+
+.atmosphere {
+  position: fixed;
+  inset: -8%;
+  width: 116%;
+  height: 116%;
+  object-fit: cover;
+  filter: blur(50px) saturate(0.85);
+  opacity: 0.5;
+  z-index: -2;
+  pointer-events: none;
+}
+
+.veil {
+  position: fixed;
+  inset: 0;
+  background: var(--color-void-black);
+  opacity: 0.72;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Content sits on the void, so panels stay readable over the atmosphere. */
+.has-atmosphere .card { background: rgba(39, 42, 42, 0.82); }
+.has-atmosphere .log,
+.has-atmosphere .newsbar { background: rgba(5, 5, 5, 0.86); }
+.has-atmosphere .composer { background: rgba(11, 11, 11, 0.92); }
+
 /* --- news bar ------------------------------------------------------------ */
 
 .newsbar {

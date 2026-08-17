@@ -2,10 +2,55 @@ import { useEffect, useState } from 'react'
 import Ingest from './Ingest.jsx'
 import Chat from './Chat.jsx'
 
+/** Optional ambient backdrop.
+ *
+ *  Drop a file into ui/public and it is picked up automatically:
+ *    atmosphere.mp4   preferred, looped and muted
+ *    atmosphere.jpg   fallback still
+ *  With neither present the UI stays flat void, which is also correct.
+ */
+function Atmosphere({ onFound }) {
+  const [kind, setKind] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function probe(path) {
+      try {
+        const r = await fetch(path, { method: 'HEAD' })
+        return r.ok && !(r.headers.get('content-type') || '').includes('text/html')
+      } catch { return false }
+    }
+    ;(async () => {
+      for (const [path, k] of [['/atmosphere.mp4', 'video'], ['/atmosphere.jpg', 'image'], ['/atmosphere.png', 'image']]) {
+        if (cancelled) return
+        if (await probe(path)) {
+          setKind({ k, path })
+          onFound?.()
+          return
+        }
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  if (!kind) return null
+  return (
+    <>
+      {kind.k === 'video' ? (
+        <video className="atmosphere" src={kind.path} autoPlay muted loop playsInline />
+      ) : (
+        <img className="atmosphere" src={kind.path} alt="" />
+      )}
+      <div className="veil" />
+    </>
+  )
+}
+
 export default function App() {
   const [stats, setStats] = useState(null)
   const [people, setPeople] = useState([])
   const [view, setView] = useState('ingest')
+  const [atmosphere, setAtmosphere] = useState(false)
 
   function refresh() {
     fetch('/api/stats').then((r) => r.json()).then(setStats).catch(() => {})
@@ -22,7 +67,9 @@ export default function App() {
   useEffect(() => { if (!loaded) setView('ingest') }, [loaded])
 
   return (
-    <>
+    <div className={atmosphere ? 'has-atmosphere' : ''}>
+      <Atmosphere onFound={() => setAtmosphere(true)} />
+
       <div className="newsbar mono">
         arbiter<span className="sep">•</span>enterprise ontology on hydradb
         <span className="sep">•</span>
@@ -66,7 +113,7 @@ export default function App() {
           question costs nothing and cannot be answered by a guess.
         </footer>
       </div>
-    </>
+    </div>
   )
 }
 

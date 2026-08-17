@@ -48,3 +48,6 @@ Thumbs.db
 
 # Hackathon reference material, not part of the project
 *.pdf
+
+# Ambient backdrop assets, kept local
+ui/public/atmosphere.*
