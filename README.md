@@ -123,6 +123,16 @@ python -m ingest.load --tier-b
 
 Any OpenAI-compatible provider works (`LLM_PROVIDER=gemini|groq|cerebras|openrouter|openai|ollama|anthropic`). The default is **Gemini's free tier**, which is enough for this corpus. Extraction is cached on a content hash, so reruns cost nothing.
 
+### Web UI
+
+```powershell
+powershell -File scripts\ui_up.ps1      # API on 8000, Vite on 5173
+```
+
+One page showing everything an answer is made of at once: the answer with its gate, the traversal path, every claim cited with source and score, the arbitration panel when sources disagreed, the query plan (which entities matched and how), and entity-resolution merge evidence. A date field re-runs any question as the graph stood on an earlier day.
+
+`api.py` is a thin wrapper over the same `answer.engine.Engine` the CLI uses, so the two cannot disagree about what the graph says. The CLI remains the scriptable interface (`--json`, exit code 2 on abstention).
+
 ### The demo questions
 
 ```powershell
@@ -210,7 +220,9 @@ resolve/                 entity resolution (normalize, features, engine) + claim
 arbiter/                 conflict policy and supersession
 answer/                  query planner, traversal, gates, grounded generation, citation verification
 eval/                    28-question seed suite + similarity baseline + HERB scorer
-cli.py                   the interface
+cli.py                   terminal interface
+api.py                   HTTP wrapper over the same engine
+ui/                      Vite + React single page: answer, path, citations, arbitration, entities
 data/seed/               synthetic 9-tool corpus with planted ground truth
 scripts/                 stack up, graph reset, capability spike, resolution report, scale test
 ```
