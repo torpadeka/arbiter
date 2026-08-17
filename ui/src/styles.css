@@ -73,9 +73,14 @@ button { font: inherit; letter-spacing: inherit; text-transform: inherit; cursor
 }
 
 /* --- atmosphere ----------------------------------------------------------
-   Ambient, not illustrative. Heavily blurred and pushed far back, with a flat
-   void veil over it so type never loses contrast. A solid veil rather than a
-   gradient, since the system forbids colour transitions. */
+   Ambient, not illustrative. Pushed far back behind a flat void veil so type
+   never loses contrast, and a solid veil rather than a gradient, since the
+   system forbids colour transitions.
+
+   Blur is tuned to the footage rather than fixed. A heavy blur suits smoke or
+   liquid, but it erases thin high contrast marks: at 30px the current clip of
+   falling streaks disappeared completely. If a backdrop looks like nothing is
+   there, lower the blur before raising the opacity. */
 
 .atmosphere {
   position: fixed;
@@ -83,8 +88,8 @@ button { font: inherit; letter-spacing: inherit; text-transform: inherit; cursor
   width: 116%;
   height: 116%;
   object-fit: cover;
-  filter: blur(46px) saturate(0.9);
-  opacity: 0.66;
+  filter: blur(7px) saturate(1);
+  opacity: 0.5;
   z-index: -2;
   pointer-events: none;
 }
@@ -93,13 +98,13 @@ button { font: inherit; letter-spacing: inherit; text-transform: inherit; cursor
   position: fixed;
   inset: 0;
   background: var(--color-void-black);
-  opacity: 0.62;
+  opacity: 0.42;
   z-index: -1;
   pointer-events: none;
 }
 
 /* Content sits on the void, so panels stay readable over the atmosphere. */
-.has-atmosphere .card { background: rgba(39, 42, 42, 0.82); }
+.has-atmosphere .card { background: rgba(28, 31, 31, 0.93); }
 .has-atmosphere .log,
 .has-atmosphere .newsbar { background: rgba(5, 5, 5, 0.86); }
 .has-atmosphere .composer { background: rgba(11, 11, 11, 0.92); }
