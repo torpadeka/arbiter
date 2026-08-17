@@ -49,17 +49,26 @@ python -m ingest.load --source herb --products 1
 python eval/herb_eval.py --products 1
 ```
 
-One product = 1,260 documents → 4,150 claims, 495 people, ~21k edges. Scored on HERB's questions:
+Scored on HERB's questions at two corpus sizes:
 
-| | result |
-|---|---|
-| **Unanswerable questions declined** | **16/16 (100%)** |
-| Answerable (set retrieval) | recall 32%, precision 30%, F1 26%, any-hit 42% |
-| Over-abstained on answerable | 7/12 |
+| | 1 product (1,260 docs) | 5 products (6,300 docs) |
+|---|---|---|
+| **Unanswerable declined** | **16/16 (100%)** | **108/110 (98%)** |
+| Answerable — recall | 32% | 3% |
+| Answerable — precision | 30% | 4% |
+| Answerable — any-hit | 42% | 11% |
+| Over-abstained | 7/12 | 37/46 |
+
+**Both numbers are reported because the second one is bad.** Abstention holds up as the corpus widens — 98% of 110 unanswerable questions declined — but answerable accuracy degrades sharply, and it is worth being precise about why rather than quietly publishing the flattering column.
 
 **The abstention number is the one that matters.** HERB's unanswerable questions are built to look answerable — *"employee IDs of team members who shared demos of ActionGenie's competitor products"* names a real product and a real relationship; the corpus simply never records it. We decline all sixteen. An earlier build answered six of them with sentences like *"Fiona Brown — member of → ActionGenie"*: fluent, sourced, and wrong. Similarity search cannot decline at all.
 
-**Where it is weak, and why.** All 7 over-abstentions are one question type: *"which engineers resolved the API Security issue"*. HERB records bug resolution only in Slack prose, and tier B is capped by design, so those claims are not in the graph. The abstention is therefore *correct behaviour given what was ingested* — the system declines rather than guessing — but it is still a miss against the benchmark, and it is counted as one here.
+**Where it is weak, and why.** Two distinct causes, neither fixable by prompt tuning:
+
+1. **Most HERB answerable questions are aggregate or superlative**, not relational: *"the engineer with the **highest number** of approved PRs"*, *"engineers who resolved the **maximum number** of customer bugs"*, *"who worked on the **previous release**"*. Those need counting, ranking and release-window reasoning. Arbiter answers *"what is true about X, and who said so"* — a different query class. It declines them rather than guessing, which is right, and still scores zero against the benchmark, which is fair.
+2. **Accuracy falls as corpus breadth grows.** Every product ships a "Market Research Report" and a "Product Vision Document", so title matching becomes ambiguous across products. Anchoring is now filtered by the project a document belongs to, which is correct but insufficient — the remaining loss is in retrieval breadth, not in anchoring. This is the honest limitation of a keyword-and-fuzzy planner on a wide corpus, and it is the first thing worth fixing with more time.
+
+The bug-resolution questions are a third, smaller case: HERB records that information only in Slack prose, and tier B is capped by design, so those claims never enter the graph. The abstention is correct given what was ingested, and is still counted as a miss here.
 
 Answerable questions ask for *sets* ("the authors and key reviewers of the Market Research Report" has 11 ground-truth ids), so they are scored as retrieval rather than as a rendered sentence. Getting from 1% to 32% recall took three graph-level fixes, none of them prompt engineering:
 

@@ -149,6 +149,14 @@ class EntityIndex:
             if target and row.get("alias"):
                 self.alias_targets[norm(row["alias"])] = target
 
+        # Which project each document belongs to. Document titles repeat across
+        # products — every product has a "Market Research Report" — so a title
+        # alone is ambiguous, and the question usually names the product too.
+        self.artifact_project: dict[str, str] = {}
+        for row in client.query("MATCH (p:Project)-[:DISCUSSED_IN]->(a) RETURN p.key AS project, a.key AS artifact"):
+            if row.get("artifact") and row.get("project"):
+                self.artifact_project[row["artifact"]] = row["project"]
+
     def match(self, question: str, limit: int = 4) -> tuple[list[Entity], list[str]]:
         """Entities mentioned in the question, best first, plus unmatched terms."""
         q = norm(question)
@@ -192,7 +200,21 @@ class EntityIndex:
                 if not prior or best > prior[0]:
                     scored[ent.key] = (best, Entity(**{**ent.__dict__, "matched_via": via, "matched_text": text}))
 
-        ranked = [e for _, e in sorted(scored.values(), key=lambda kv: -kv[0])][:limit]
+        ordered = [e for _, e in sorted(scored.values(), key=lambda kv: -kv[0])]
+
+        # When the question names a project, drop documents belonging to a
+        # different one. Without this, "the Market Research Report for
+        # ActionGenie" anchors on whichever product's report happened to rank
+        # first, and the answer comes from the wrong company workstream.
+        projects = {e.key for e in ordered if e.label == "Project"}
+        if projects:
+            ordered = [
+                e for e in ordered
+                if e.label != "Artifact"
+                or self.artifact_project.get(e.key) in projects
+                or e.key not in self.artifact_project
+            ]
+        ranked = ordered[:limit]
 
         # Tokens are "explained" by any matched entity's name or its key tail,
         # so a question naming a ticket as "ENG-4471" counts as covered even
