@@ -164,8 +164,8 @@ function Turn({ turn, people }) {
             {top && <Claim c={top} verdict="current" />}
             {conflicts.map((c) => <Claim key={c.key} c={c} verdict={c.status} />)}
             <p className="prose" style={{ color: 'var(--dimmer)', marginTop: 14 }}>
-              Nothing is thrown away. The overruled statement is kept, which is how the date box above
-              can answer the same question as it stood on an earlier day.
+              Nothing is thrown away. The overruled statement is kept, which is how the same question
+              can be answered as it stood on an earlier day: set the date, or just ask for one.
             </p>
           </div>
         )}

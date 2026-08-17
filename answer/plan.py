@@ -285,8 +285,14 @@ def detect_as_of(question: str) -> str:
 
 def plan(question: str, index: EntityIndex, schema: Schema | None = None, as_of: str = "") -> QueryPlan:
     schema = schema or load_schema()
-    entities, unmatched = index.match(question)
-    predicates = detect_predicates(question, schema)
+    # The date phrase is an instruction, not a thing to look for. Left in, its
+    # digits are treated as part of the subject and the question is declined for
+    # containing something the corpus has no record of.
+    when = as_of or detect_as_of(question)
+    subject_text = AS_OF_RE.sub(" ", question) if AS_OF_RE.search(question) else question
+
+    entities, unmatched = index.match(subject_text)
+    predicates = detect_predicates(subject_text, schema)
 
     # Words that named a matched predicate are explained, whether they came from
     # the hint table or from the vocabulary itself. Without this an induced
@@ -300,7 +306,7 @@ def plan(question: str, index: EntityIndex, schema: Schema | None = None, as_of:
         question=question,
         entities=entities,
         predicates=predicates,
-        as_of=as_of or detect_as_of(question),
+        as_of=when,
         unmatched_terms=unmatched,
         set_mode=any(cue in lowered for cue in SET_CUES),
     )

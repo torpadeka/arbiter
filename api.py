@@ -39,6 +39,7 @@ app.add_middleware(
 ROOT = Path(__file__).resolve().parent
 STATE = ROOT / ".arbiter" / "state.json"
 _engine: Engine | None = None
+_engine_claims: int = -1
 
 
 # --- background jobs --------------------------------------------------------
@@ -97,8 +98,9 @@ def start_job(kind: str, work: Callable[[], dict]) -> Job:
 
 def reset_engine() -> None:
     """Drop cached state so the next question sees the new graph and ontology."""
-    global _engine
+    global _engine, _engine_claims
     _engine = None
+    _engine_claims = -1
     load_schema.cache_clear()
 
 
@@ -116,10 +118,23 @@ def active_schema() -> Schema:
 
 
 def engine() -> Engine:
-    """Built once: the entity index is a full scan and must not run per request."""
-    global _engine
-    if _engine is None:
+    """Cached, but invalidated when the graph underneath it changes.
+
+    The entity index is a full scan, so it cannot be rebuilt per request. It also
+    cannot be cached forever: a graph rebuilt from the CLI while this process is
+    running would leave the index describing a corpus that no longer exists, and
+    the symptom is the worst kind, confidently reporting no record of something
+    plainly present. A claim count is cheap and settles it.
+    """
+    global _engine, _engine_claims
+    try:
+        current = HydraClient().count("Claim")
+    except Exception:
+        current = _engine_claims
+    if _engine is None or current != _engine_claims:
+        load_schema.cache_clear()
         _engine = Engine(schema=active_schema())
+        _engine_claims = current
     return _engine
 
 

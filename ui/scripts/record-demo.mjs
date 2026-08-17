@@ -174,17 +174,13 @@ try {
   await ask(page, 'who owns atlas migration?', 5200)
   mark('conflict')
 
-  // the same question, as the data stood in March
-  const date = page.locator('input[type=date]')
-  await press(page, date, 300)
-  await date.fill('2026-03-15')
-  await beat(900)
-  await ask(page, 'who owns atlas migration?', 4200)
+  // the same fact, asked about an earlier date. Phrased in the question itself
+  // rather than set in the date box: on screen, two identical questions with
+  // different answers read as a bug, however correct they are.
+  await ask(page, 'who owned atlas migration as of 2026-03-15?', 4600)
   mark('as of')
 
   // a question the data cannot answer
-  await press(page, page.getByRole('button', { name: 'clear date' }), 300)
-  await beat(400)
   await ask(page, 'what is the budget for atlas migration?', 4400)
   mark('refusal')
 
