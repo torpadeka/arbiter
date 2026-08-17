@@ -77,19 +77,18 @@ button { font: inherit; letter-spacing: inherit; text-transform: inherit; cursor
    never loses contrast, and a solid veil rather than a gradient, since the
    system forbids colour transitions.
 
-   The treatment belongs to the footage, not to the stylesheet, and these
-   numbers were measured rather than guessed. Sample an empty strip of the page
-   and read its luma before deciding anything.
+   The treatment belongs to the footage rather than the stylesheet, and the way
+   to judge it is CONTRAST WITHIN A BAND, not average brightness. Average is what
+   misled an earlier pass: a heavily blurred clip measured a perfectly reasonable
+   mean and was still invisible, because every pixel in any given region was
+   within five levels of its neighbours. A flat wash reads as nothing at all, no
+   matter what its mean is. Screenshot a wide empty band and compare min to max.
 
-   Smooth colour fields, like the current clip, take a heavy blur happily and
-   need darkening instead: untreated it sat at luma 44 against a canvas of 11,
-   which reads as grey rather than void, so brightness comes down to 0.5 and the
-   veil up to 0.55, landing near 34.
-
-   Thin high contrast marks are the opposite case. An earlier clip of falling
-   streaks vanished at 7px blur, reaching only 32 against a base of 22, because
-   blur spreads a thin streak over ten times its width and takes its peak with
-   it. If a backdrop looks absent, lower the blur before raising opacity.
+   That gives the rule for blur, which cuts both ways. Thin bright marks need
+   almost none: an earlier clip of falling streaks lost its peaks at 7px, since
+   blur spreads a streak over ten times its width. Smooth colour fields tolerate
+   more, but past roughly 10px they flatten into that invisible wash. This clip
+   sits at 8px, which keeps the waves reading as structure.
 
    Saturation stays low either way: ember rust is meant to be the only colour in
    the system, so a chromatic backdrop is desaturated rather than allowed to
@@ -101,8 +100,8 @@ button { font: inherit; letter-spacing: inherit; text-transform: inherit; cursor
   width: 116%;
   height: 116%;
   object-fit: cover;
-  filter: blur(26px) saturate(0.4) brightness(0.5);
-  opacity: 0.5;
+  filter: blur(8px) saturate(0.55) brightness(0.9);
+  opacity: 0.7;
   z-index: -2;
   pointer-events: none;
 
@@ -118,7 +117,7 @@ button { font: inherit; letter-spacing: inherit; text-transform: inherit; cursor
   position: fixed;
   inset: 0;
   background: var(--color-void-black);
-  opacity: 0.55;
+  opacity: 0.4;
   z-index: -1;
   pointer-events: none;
 }
