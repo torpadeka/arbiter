@@ -83,8 +83,8 @@ button { font: inherit; letter-spacing: inherit; text-transform: inherit; cursor
   width: 116%;
   height: 116%;
   object-fit: cover;
-  filter: blur(50px) saturate(0.85);
-  opacity: 0.5;
+  filter: blur(46px) saturate(0.9);
+  opacity: 0.66;
   z-index: -2;
   pointer-events: none;
 }
@@ -93,7 +93,7 @@ button { font: inherit; letter-spacing: inherit; text-transform: inherit; cursor
   position: fixed;
   inset: 0;
   background: var(--color-void-black);
-  opacity: 0.72;
+  opacity: 0.62;
   z-index: -1;
   pointer-events: none;
 }

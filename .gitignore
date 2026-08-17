@@ -51,3 +51,9 @@ Thumbs.db
 
 # Ambient backdrop assets, kept local
 ui/public/atmosphere.*
+
+# Source video files, kept local
+*.mp4
+
+# Recorded footage, kept local
+recordings/
