@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Ingest from './Ingest.jsx'
 import Chat from './Chat.jsx'
 import HowItWorks from './HowItWorks.jsx'
@@ -14,18 +14,36 @@ import Mark from './Mark.jsx'
  *  and a heavy blur erases them entirely.
  */
 const ATMOSPHERE = '/atmosphere.mp4'
+const ATMOSPHERE_STILL = '/atmosphere.jpg'
 
 function Atmosphere({ onReady }) {
+  const video = useRef(null)
   const [failed, setFailed] = useState(false)
 
   useEffect(() => { if (!failed) onReady?.() }, [failed])
+
+  // Autoplay is a request, not a guarantee: a browser can refuse it for reasons
+  // the page cannot see, and a refused video renders nothing at all. So the
+  // still is painted behind it as a poster and as a CSS background, the page
+  // looks right either way, and a play is retried on the first interaction.
+  useEffect(() => {
+    const el = video.current
+    if (!el) return
+    const attempt = () => el.play?.().catch(() => {})
+    attempt()
+    const events = ['pointerdown', 'keydown', 'wheel']
+    events.forEach((e) => window.addEventListener(e, attempt, { once: true, passive: true }))
+    return () => events.forEach((e) => window.removeEventListener(e, attempt))
+  }, [])
 
   if (failed) return null
   return (
     <>
       <video
+        ref={video}
         className="atmosphere"
         src={ATMOSPHERE}
+        poster={ATMOSPHERE_STILL}
         autoPlay
         muted
         loop

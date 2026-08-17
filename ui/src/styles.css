@@ -105,6 +105,13 @@ button { font: inherit; letter-spacing: inherit; text-transform: inherit; cursor
   opacity: 0.5;
   z-index: -2;
   pointer-events: none;
+
+  /* The still sits behind the video frames. If playback never starts, or the
+     browser refuses autoplay, this is what shows, and the page still looks
+     designed rather than empty. */
+  background-image: url('/atmosphere.jpg');
+  background-size: cover;
+  background-position: center;
 }
 
 .veil {
