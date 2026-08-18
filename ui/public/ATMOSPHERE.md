@@ -47,5 +47,5 @@ luma range.
 - saturation stays low either way, so the backdrop never introduces a second
   accent colour alongside ember rust
 
-The shipped clip is soft colour waves at 26px blur, 0.4 saturation, 0.5
-brightness and 0.5 opacity, behind a 55% void veil.
+The shipped clip is soft colour waves at 8px blur, 0.55 saturation, 0.9
+brightness and 0.7 opacity, behind a 40% void veil.

@@ -151,7 +151,7 @@ try {
   await scrollBy(page, 300)
   await press(page, page.getByRole('button', { name: 'fields and written text' }), 450)
   await beat(900)
-  await press(page, page.getByRole('button', { name: 'use the one shipped here' }), 450)
+  await press(page, page.getByRole('button', { name: 'use pre-determined standard vocabulary' }), 450)
   await beat(1100)
   mark('choices')
 
