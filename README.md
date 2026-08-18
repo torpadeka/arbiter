@@ -80,16 +80,21 @@ Answerable questions ask for *sets* ("the authors and key reviewers of the Marke
 
 ## Use it on your own data
 
-No schema to write. Point it at a folder and it derives the ontology:
+No schema to write. Start the stack, open the UI, point it at a folder:
 
 ```powershell
-powershell -File scripts\hydradb_up.ps1
-python cli.py init ./mydata        # profile, induce an ontology, write it out
-python cli.py ingest               # parse, resolve, arbitrate, write the graph
-python cli.py ask "who owns the migration?"
+powershell -File scripts\hydradb_up.ps1     # MinIO + a HydraDB node
+powershell -File scripts\ui_up.ps1          # opens http://127.0.0.1:5173
 ```
 
-`init` reads `.jsonl`, `.json` (a list, a file of sections, or an id-keyed map), `.csv`, and plain text, then runs five stages. Every LLM output is validated against the data before it is accepted, and anything that fails validation is dropped rather than written into the schema:
+Everything after that happens on the **load data** page, in four steps:
+
+1. **Where are your files.** Type a path or use the folder browser. Any folder on this machine.
+2. **How much should it read.** *Fields only* is deterministic, free, and needs no API key. *Fields and written text* adds an LLM pass that finds facts stated in sentences rather than in fields.
+3. **Which vocabulary.** *Work it out from my files* derives the ontology from what you loaded. *Use pre-determined standard vocabulary* uses the one that ships with Arbiter.
+4. **Clear, read the files, build.** Each step reports what it did before the next one runs, and the derived predicates are shown in a table before anything is written to the graph.
+
+Reading a folder for the first time runs `.jsonl`, `.json` (a list, a file of sections, or an id-keyed map), `.csv`, and plain text, then runs five stages. Every LLM output is validated against the data before it is accepted, and anything that fails validation is dropped rather than written into the schema:
 
 | Stage | What it does | How it is checked |
 |---|---|---|
@@ -99,7 +104,7 @@ python cli.py ask "who owns the migration?"
 | cardinality | **Counted, not asked.** Distinct objects per (subject, predicate) across every tier-A claim in the corpus. Consistently one means functional, so competing values arbitrate | Measured on the full corpus, not a sample |
 | rules | Maps structured fields onto the induced predicates so tier A covers everything with no LLM | Paths must resolve, predicates must exist, types must respect domain and range |
 
-The induced ontology is written to `ontology/generated.yaml` and printed before ingest, so a wrong cardinality is something you see rather than something you discover later through missing contradictions. Edit it and re-run `ingest` at any time. `.arbiter/state.json` remembers which schema the graph was built with, so `ask` always queries with the ontology that produced it.
+The induced ontology is written to `ontology/generated.yaml` and shown in the UI before the graph is built, so a wrong cardinality is something you see rather than something you discover later through missing contradictions. Edit that file and build again at any time. The graph records which schema produced it, so questions are always answered with the ontology the data was loaded under.
 
 Getting cardinality right matters more than it sounds. Mark a multi-valued predicate functional and every second value looks like a contradiction; mark a functional one multi-valued and real contradictions are never detected. Counting it beats guessing, and it beat my own hand-authoring, which got it wrong twice.
 
@@ -110,7 +115,7 @@ Getting cardinality right matters more than it sounds. Mark a multi-valued predi
 | | Version used | Needed for |
 |---|---|---|
 | Docker | 24+ | HydraDB and MinIO run as containers |
-| Python | 3.10.9 (3.10+) | the pipeline, CLI and API |
+| Python | 3.10.9 (3.10+) | the pipeline, the API and the evaluation |
 | Node | 22.14 (18+) | the web UI only |
 | An LLM API key | optional | free-text extraction and prose answers only |
 
@@ -123,55 +128,71 @@ same commands directly.
 ```powershell
 powershell -File scripts\hydradb_up.ps1      # MinIO + a HydraDB node
 python -m venv .venv; .\.venv\Scripts\pip install -r requirements.txt
-python data\seed\build_seed.py               # build the seed corpus
-python -m ingest.load                        # parse -> resolve -> arbitrate -> write
-python cli.py ask "who is ENG-4471 assigned to?"
+python data\seed\build_seed.py               # writes the bundled corpus into data\raw
+powershell -File scripts\ui_up.ps1           # API on 8000, UI on 5173
 ```
 
-No API key is needed for any of the above. Ingestion, entity resolution, arbitration, traversal and abstention are all deterministic. A key is only used for LLM extraction over free text and for rendering answers as prose.
-
-To include free text (Slack threads, email, meeting transcripts) copy `.env.example` to `.env`, add a key, and rerun:
-
-```powershell
-python -m ingest.load --tier-b
-```
-
-Any OpenAI-compatible provider works (`LLM_PROVIDER=gemini|groq|cerebras|openrouter|openai|ollama|anthropic`). The default is **Gemini's free tier**, which is enough for this corpus. Extraction is cached on a content hash, so reruns cost nothing.
-
-### Web UI
-
-```powershell
-powershell -File scripts\ui_up.ps1      # installs UI deps if missing, then starts both
-```
-
-It runs `npm install` in `ui/` on first use, starts the API on **8000** and Vite on
-**5173**, waits for `/api/health` to answer, then opens the browser. To run the two
-halves by hand:
+`ui_up.ps1` runs `npm install` in `ui/` on first use, waits for `/api/health` to answer,
+then opens the browser. To run the two halves by hand:
 
 ```powershell
 python -m uvicorn api:app --port 8000
 cd ui; npm install; npm run dev
 ```
 
-One page showing everything an answer is made of at once: the answer with its gate, the traversal path, every claim cited with source and score, the arbitration panel when sources disagreed, the query plan (which entities matched and how), and entity-resolution merge evidence. A date field re-runs any question as the graph stood on an earlier day.
+The UI opens on **load data**. Point it at `data/raw`, choose *fields only*, then clear,
+read the files and build. No API key is needed for any of that: parsing, entity
+resolution, arbitration, traversal and abstention are all deterministic. A key is used
+only for reading free text and for phrasing answers as prose.
 
-`api.py` is a thin wrapper over the same `answer.engine.Engine` the CLI uses, so the two cannot disagree about what the graph says. The CLI remains the scriptable interface (`--json`, exit code 2 on abstention).
+To include free text (Slack threads, email, meeting transcripts) copy `.env.example` to
+`.env`, add a key, and choose *fields and written text* instead. Any OpenAI-compatible
+provider works (`LLM_PROVIDER=gemini|groq|cerebras|openrouter|openai|ollama|anthropic`).
+The default is **Gemini's free tier**, which is enough for this corpus. Extraction is
+cached on a content hash, so rebuilding the same corpus costs nothing.
 
-### The demo questions
+### No data of your own
 
-```powershell
-python cli.py ask "who is ENG-4471 assigned to?"                    # lookup + field-map provenance
-python cli.py ask "what does @soham work on?"                       # alias-crossing multi-hop
-python cli.py ask "who does @soham report to?"                      # fact stated only in email prose
-python cli.py ask "who owns Atlas Migration?"                       # Slack vs transcript, arbitrated
-python cli.py ask "who owns Atlas Migration?" --as-of 2026-03-15    # who owned it in March
-python cli.py ask "when does Atlas Migration launch?"               # three sources, two superseded
-python cli.py ask "what is the budget for Atlas Migration?"         # abstains, with a reason
-python cli.py ask "who does Wei Chen report to?"                    # abstains: Sam's manager is not Wei's
-python cli.py entities                                              # merge evidence per person
-```
+The load data page has a second button that fetches [HERB](https://huggingface.co/datasets/Salesforce/HERB)
+from Hugging Face, clears the graph, and builds 5 of its 30 products: 6,737 documents
+into 20,405 statements in 82 seconds. Add `?products=N` to the URL to change how many.
 
-The last one matters more than it looks. Wei sits one hop from Sam, whose reporting line *is* recorded, and that adjacency is exactly what makes a retrieval system answer confidently about the wrong person.
+### What an answer shows
+
+Every answer arrives with the whole of its reasoning on one page: the answer and which
+gate it passed, the traversal path through the graph, each claim cited with its source
+document and score, an arbitration panel whenever sources disagreed, the query plan
+showing which entities matched and how, and the merge evidence behind any person whose
+names were joined. Writing *as of 2026-03-15* inside a question re-runs it against the
+graph as it stood on that day.
+
+`api.py` is a thin wrapper over `answer.engine.Engine`, which holds all of the logic, so
+the interface cannot disagree with what the graph actually says.
+
+A third page, **how it works**, reads the live ontology out of the graph and draws the
+arbitration weights, the source authority table and the three abstention gates from the
+values currently in use rather than from a diagram that can drift.
+
+### Questions worth asking first
+
+On the bundled corpus, each of these shows a different part of the system. The UI also
+generates its own suggestions from whatever graph is loaded, verified against it before
+they are offered, so they are never stale examples from another dataset.
+
+| Ask this | What it demonstrates |
+|---|---|
+| who is ENG-4471 assigned to? | lookup, with field-map provenance |
+| what does @soham work on? | alias-crossing multi-hop |
+| who does @soham report to? | a fact stated only in email prose |
+| who owns Atlas Migration? | Slack against a transcript, arbitrated |
+| who owns Atlas Migration as of 2026-03-15? | who owned it in March, from the supersession chain |
+| when does Atlas Migration launch? | three sources, two of them superseded |
+| what is the budget for Atlas Migration? | abstains, and says which predicate is missing |
+| who does Wei Chen report to? | abstains, because Sam's manager is not Wei's |
+
+The last one matters more than it looks. Wei sits one hop from Sam, whose reporting line
+*is* recorded, and that adjacency is exactly what makes a retrieval system answer
+confidently about the wrong person.
 
 ## How HydraDB is used, and what breaks without it
 
@@ -216,7 +237,7 @@ Two deployment notes, both found the hard way:
   - *functional form*: rewrite a multi-valued predicate to its functional inverse (`OWNS` becomes `OWNED_BY`) so competing claims land in one arbitrable set.
 
   Without these, the two halves of a real contradiction, Slack's "I'm taking the Atlas migration" and a transcript's "it moved to me in Jira", sit under different predicates on different nodes and never meet.
-- **Entity resolution.** Normalize, block, score, **veto**, union-find. Three vetoes are absolute: conflicting emails, conflicting surnames, and *addressed-by-name*, since an author who writes "Thanks Priya" is not Priya. Every merge stores its evidence, which the CLI displays.
+- **Entity resolution.** Normalize, block, score, **veto**, union-find. Three vetoes are absolute: conflicting emails, conflicting surnames, and *addressed-by-name*, since an author who writes "Thanks Priya" is not Priya. Every merge stores its evidence, and the UI shows it next to the person it merged.
 - **Arbitration.** A published, tunable formula, `0.35*authority + 0.30*recency + 0.15*specificity + 0.15*corroboration - 0.05*hedging`, with a source-authority table (Jira 1.00 down to Slack 0.50). Losing claims are **never deleted**. They are marked superseded and linked with `:SUPERSEDES`. Conflicts are only detected for *functional* predicates, because two tickets assigned to one person is not a contradiction.
 
 **Read path:** plan, gate, traverse, arbitrate, generate, verify.
@@ -244,7 +265,7 @@ resolve/                 entity resolution (normalize, features, engine) + claim
 arbiter/                 conflict policy and supersession
 answer/                  query planner, traversal, gates, grounded generation, citation verification
 eval/                    28-question seed suite + similarity baseline + HERB scorer
-cli.py                   terminal interface
+cli.py                   scriptable terminal entry point, optional and not needed for the UI
 api.py                   HTTP wrapper over the same engine
 ui/                      Vite + React single page: answer, path, citations, arbitration, entities
 data/seed/               synthetic 9-tool corpus with planted ground truth
@@ -276,7 +297,7 @@ fails every mutation after the first few writes.
 | `rapidfuzz`, `metaphone`, `unidecode` | entity resolution: scoring, phonetic blocking, normalization |
 | `tenacity` | retries around graph writes and LLM calls |
 | `fastapi`, `uvicorn` | the HTTP API behind the web UI |
-| `rich` | CLI rendering |
+| `rich` | terminal output for the scripts under `scripts/` |
 | `numpy`, `tabulate` | evaluation and its baseline |
 
 No LLM SDK is required. `llm.py` speaks to any OpenAI-compatible endpoint over `httpx`.
@@ -339,8 +360,7 @@ Two of these deserve a sentence rather than a table row.
 
 **HERB is CC BY-NC 4.0, which is non-commercial.** This project uses it for evaluation
 and for the demo, which that licence permits. The dataset is **not redistributed here**:
-`data/herb/` is in `.gitignore`, and both the CLI and the UI download it from Hugging
-Face at runtime. Anyone building on Arbiter commercially needs to bring their own corpus.
+`data/herb/` is in `.gitignore`, and the UI downloads it from Hugging Face at runtime. Anyone building on Arbiter commercially needs to bring their own corpus.
 
 **HydraDB is AGPL-3.0 and Arbiter is MIT.** The two stay separable because HydraDB runs
 as an unmodified separate service reached over HTTP or Bolt. Nothing in this repository
