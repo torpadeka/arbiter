@@ -29,7 +29,8 @@ Unsplash, Pexels, Pixabay. For video: Pexels Video, Coverr, Mixkit.
 Blur destroys detail, so resolution barely matters and small files are better.
 
 - image: 1600px wide, JPEG quality 70, aim for under 300 KB
-- video: 720p, 5 to 10 seconds, silent, H.264, aim for under 3 MB
+- video: 540p to 720p, silent, H.264, aim for under 1 MB. Length matters less than
+  the seam: check that the last frame matches the first, or the loop will jump
 
 A large video is the one real risk: it competes with a screen recording for CPU.
 If the demo stutters, use the still.
@@ -48,4 +49,8 @@ luma range.
   accent colour alongside ember rust
 
 The shipped clip is soft colour waves at 8px blur, 0.55 saturation, 0.9
-brightness and 0.7 opacity, behind a 40% void veil.
+brightness and 0.7 opacity, behind a 40% void veil. It runs the full 30 seconds
+rather than a trimmed excerpt, because the footage returns to its opening frame
+and so repeats without a visible jump. Check that before trimming anything: an
+excerpt that ends mid-motion cuts back to the start every loop, and once you
+have noticed it you cannot unsee it.

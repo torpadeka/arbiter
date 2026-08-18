@@ -100,9 +100,9 @@ export default function App() {
             <Mark size={44} />
             <div>
               <div className="wordmark">arbiter</div>
-              <div className="tagline">what is currently true, who established it, and when</div>
             </div>
           </div>
+          <div className="tagline">what is currently true, who established it, and when</div>
 
           <div className="stats">
             {stats && Object.entries(stats.counts).filter(([, v]) => v > 0).map(([k, v]) => (
