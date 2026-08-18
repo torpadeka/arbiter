@@ -6,6 +6,8 @@ Nine business tools, one canonical knowledge graph in [HydraDB](https://github.c
 
 Built for **Hack Hydra 2026, Track 01: Enterprise Context + Ontology**.
 
+[The problem](#the-problem) · [Results](#results) · [Setup and run](#setup-and-run) · [How HydraDB is used](#how-hydradb-is-used-and-what-breaks-without-it) · [How it works](#how-it-works) · [Dependencies and environment](#dependencies-and-environment) · [Attribution](#attribution)
+
 ---
 
 ## The problem
@@ -101,9 +103,22 @@ The induced ontology is written to `ontology/generated.yaml` and printed before 
 
 Getting cardinality right matters more than it sounds. Mark a multi-valued predicate functional and every second value looks like a contradiction; mark a functional one multi-valued and real contradictions are never detected. Counting it beats guessing, and it beat my own hand-authoring, which got it wrong twice.
 
-## Quickstart with the bundled corpus
+## Setup and run
 
-Requires Docker and Python 3.10+.
+### Prerequisites
+
+| | Version used | Needed for |
+|---|---|---|
+| Docker | 24+ | HydraDB and MinIO run as containers |
+| Python | 3.10.9 (3.10+) | the pipeline, CLI and API |
+| Node | 22.14 (18+) | the web UI only |
+| An LLM API key | optional | free-text extraction and prose answers only |
+
+Scripts under `scripts/` are PowerShell, because this was built on Windows. Each one is
+a short wrapper around `docker run`, so on macOS or Linux read the script and run the
+same commands directly.
+
+### Run it end to end
 
 ```powershell
 powershell -File scripts\hydradb_up.ps1      # MinIO + a HydraDB node
@@ -126,7 +141,16 @@ Any OpenAI-compatible provider works (`LLM_PROVIDER=gemini|groq|cerebras|openrou
 ### Web UI
 
 ```powershell
-powershell -File scripts\ui_up.ps1      # API on 8000, Vite on 5173
+powershell -File scripts\ui_up.ps1      # installs UI deps if missing, then starts both
+```
+
+It runs `npm install` in `ui/` on first use, starts the API on **8000** and Vite on
+**5173**, waits for `/api/health` to answer, then opens the browser. To run the two
+halves by hand:
+
+```powershell
+python -m uvicorn api:app --port 8000
+cd ui; npm install; npm run dev
 ```
 
 One page showing everything an answer is made of at once: the answer with its gate, the traversal path, every claim cited with source and score, the arbitration panel when sources disagreed, the query plan (which entities matched and how), and entity-resolution merge evidence. A date field re-runs any question as the graph stood on an earlier day.
@@ -227,6 +251,61 @@ data/seed/               synthetic 9-tool corpus with planted ground truth
 scripts/                 stack up, graph reset, capability spike, resolution report, scale test
 ```
 
+## Dependencies and environment
+
+Nothing here is a framework choice with a hidden cost. Every dependency does one job.
+
+**Services**, both started by `scripts\hydradb_up.ps1`:
+
+| | Image | Ports | Why |
+|---|---|---|---|
+| HydraDB | `ghcr.io/hydra-db/hydradb:latest` | 7687 Bolt, 8443 HTTP, 9090 metrics | the graph, and the only database in the project |
+| MinIO | `quay.io/minio/minio` | 9000 API, 9001 console | S3-compatible object store HydraDB writes into |
+
+`CLOUD_PROVIDER=aws` is set deliberately against MinIO rather than `local`, because the
+local filesystem backend does not implement the conditional puts SlateDB needs and
+fails every mutation after the first few writes.
+
+**Python** (`requirements.txt`, install with `pip install -r requirements.txt`):
+
+| Package | Used for |
+|---|---|
+| `httpx` | HTTP transport to HydraDB, and every LLM provider |
+| `neo4j` | optional Bolt fast path, switched with `HYDRA_TRANSPORT=bolt` |
+| `pydantic`, `pyyaml`, `python-dotenv` | models, ontology file, configuration |
+| `rapidfuzz`, `metaphone`, `unidecode` | entity resolution: scoring, phonetic blocking, normalization |
+| `tenacity` | retries around graph writes and LLM calls |
+| `fastapi`, `uvicorn` | the HTTP API behind the web UI |
+| `rich` | CLI rendering |
+| `numpy`, `tabulate` | evaluation and its baseline |
+
+No LLM SDK is required. `llm.py` speaks to any OpenAI-compatible endpoint over `httpx`.
+
+**UI** (`ui/package.json`): React 18, Vite 5, and `@fontsource` for self-hosted fonts.
+Playwright is a dev dependency used only by the demo recorder.
+
+**Environment.** Copy `.env.example` to `.env`. It is fully commented, and every value
+has a working default except the API key.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `HYDRA_HTTP_URL` | `http://127.0.0.1:8443` | the query endpoint |
+| `HYDRA_BOLT_URI` | `neo4j://127.0.0.1:7687` | used only when transport is `bolt` |
+| `HYDRA_TOKEN` | dev token | written by the startup script |
+| `HYDRA_GRAPH`, `HYDRA_NAMESPACE`, `HYDRA_CELL_ID` | `default`, `default`, `cell-0` | graph addressing |
+| `HYDRA_TRANSPORT` | `http` | `http` or `bolt`, both verified by `scripts/spike_hydra.py` |
+| `LLM_PROVIDER` | `gemini` | `gemini` / `groq` / `cerebras` / `openrouter` / `openai` / `ollama` / `anthropic` |
+| `LLM_API_KEY` | empty | the only value with no default. Leave it empty to run fully deterministic |
+| `EXTRACT_CONCURRENCY` | `5` | free tiers rate-limit hard, raise once you know your quota |
+| `TIER_B_DOC_LIMIT` | `15000` | caps the LLM pass over free text. Tier A always covers everything |
+
+**Cost note, measured.** Tier A is pure Python and covers the whole corpus. Building 5
+HERB products this way is 6,737 documents into 20,405 statements in **82 seconds with
+zero API calls**. Turning tier B on for the same corpus queues 6,559 model calls, which
+on Gemini's free tier runs at roughly 25 documents per minute. Tier B is meant for a
+small corpus of prose, or for a paid quota, and `TIER_B_DOC_LIMIT` exists so that choice
+is explicit rather than discovered.
+
 ## Scale
 
 `python scripts/scale_test.py --docs 39000 --write`, on a corpus shaped like HERB:
@@ -245,6 +324,33 @@ Full-corpus scale is not a projection. Parse, resolve, arbitrate and assemble ta
 - **Tiered ingestion is a deliberate cost decision**, documented rather than hidden. Deterministic parsing runs over every document, and LLM extraction runs over free text only, capped by `TIER_B_DOC_LIMIT`.
 - **Model choice is left to the operator.** `llm.py` talks to any OpenAI-compatible endpoint, so the cost and quality trade sits in `.env` rather than being made silently in code.
 
+## Attribution
+
+| What | Source | Licence | How it is used |
+|---|---|---|---|
+| HydraDB | [hydra-db/hydradb](https://github.com/hydra-db/hydradb) | AGPL-3.0 | run unmodified as a container, talked to over the network |
+| MinIO | [min.io](https://min.io) | AGPL-3.0 | unmodified container, object store behind HydraDB |
+| HERB | [Salesforce/HERB](https://huggingface.co/datasets/Salesforce/HERB) | **CC BY-NC 4.0** | downloaded at runtime for evaluation |
+| Oswald, Roboto Mono | [fontsource](https://fontsource.org) | SIL Open Font License 1.1 | self-hosted UI fonts |
+| Backdrop clip | [Pexels](https://www.pexels.com) | Pexels licence, no attribution required | `ui/public/atmosphere.mp4`, transcoded to 960x540 |
+| Python and UI libraries | see the tables above | MIT / BSD / Apache-2.0 | listed in `requirements.txt` and `ui/package.json` |
+
+Two of these deserve a sentence rather than a table row.
+
+**HERB is CC BY-NC 4.0, which is non-commercial.** This project uses it for evaluation
+and for the demo, which that licence permits. The dataset is **not redistributed here**:
+`data/herb/` is in `.gitignore`, and both the CLI and the UI download it from Hugging
+Face at runtime. Anyone building on Arbiter commercially needs to bring their own corpus.
+
+**HydraDB is AGPL-3.0 and Arbiter is MIT.** The two stay separable because HydraDB runs
+as an unmodified separate service reached over HTTP or Bolt. Nothing in this repository
+is derived from or linked against it, and `graph/hydra.py` is our own adapter written
+against the public query API.
+
+The visual design follows a supplied design system (void black, ember rust hairline
+accents, three typographic registers). The compass mark in `ui/src/Mark.jsx` is original
+geometry drawn for this project, not a downloaded asset.
+
 ## License
 
-MIT, see [LICENSE](LICENSE). HydraDB itself is AGPL-3.0 and is used unmodified, over the network, as a separate service.
+MIT, see [LICENSE](LICENSE). Third-party licences and their obligations are set out under [Attribution](#attribution) above.
